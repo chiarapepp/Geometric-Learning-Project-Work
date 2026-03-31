@@ -1,0 +1,2 @@
+epoch,model_name,loss_name,loss,epoch_time_sec
+1,pointnet++,chamfer,0.2686989011708647,3.304923499992583
