@@ -1,63 +1,90 @@
 import torch
-from chamferdist import knn_points
 
 
-def density_aware_chamfer_loss(y_hat, y, alpha=1000, n_lambda=1, non_reg=False):
+def density_aware_chamfer_loss(
+    y_hat,
+    y,
+    alpha=1000,
+    n_lambda=1,
+    non_reg=False,
+    reduction="mean",
+):
     """
-    Density-aware Chamfer Distance (DCD).
+    Density-aware Chamfer Distance (DCD) implemented with pure PyTorch.
 
     Args:
-        y_hat (torch.Tensor): Predicted points, shape (B, N, 3).
-        y (torch.Tensor): Ground-truth points, shape (B, M, 3).
-        alpha (float): Exponential scaling factor applied to distances.
-        n_lambda (float): Exponent used in frequency-based reweighting.
-        non_reg (bool): If True, use max(1, ratio) for cardinality compensation.
+        y_hat (torch.Tensor): Predicted points, shape (B, N, D)
+        y (torch.Tensor): Ground-truth points, shape (B, M, D)
+        alpha (float): Exponential scaling factor
+        n_lambda (float): Exponent for frequency-based reweighting
+        non_reg (bool): If True, use max(1, ratio) for cardinality compensation
+        reduction (str): "mean", "sum", or "none"
 
     Returns:
-        torch.Tensor: Scalar DCD loss.
+        torch.Tensor
     """
+    if y_hat.ndim != 3 or y.ndim != 3:
+        raise ValueError(
+            f"Expected tensors of shape (B, N, D), got {y_hat.shape} and {y.shape}"
+        )
+
+    if y_hat.shape[0] != y.shape[0]:
+        raise ValueError(
+            f"Batch sizes must match, got {y_hat.shape[0]} and {y.shape[0]}"
+        )
+
+    if y_hat.shape[2] != y.shape[2]:
+        raise ValueError(
+            f"Point dimensions must match, got {y_hat.shape[2]} and {y.shape[2]}"
+        )
+
     y_hat = y_hat.float()
     y = y.float()
 
     batch_size, n_x, _ = y_hat.shape
     _, n_gt, _ = y.shape
-    assert batch_size == y.shape[0]
+    device = y_hat.device
 
     if non_reg:
-        frac_12 = max(1, n_x / n_gt)
-        frac_21 = max(1, n_gt / n_x)
+        frac_12 = max(1.0, n_x / n_gt)
+        frac_21 = max(1.0, n_gt / n_x)
     else:
         frac_12 = n_x / n_gt
         frac_21 = n_gt / n_x
 
+    # Pairwise squared distances: (B, N, M)
+    dist_mat = torch.cdist(y_hat, y, p=2) ** 2
+
     # gt -> pred
-    knn_1 = knn_points(y, y_hat, K=1)
-    dist1 = knn_1.dists.squeeze(-1)   # (B, n_gt)
-    idx1 = knn_1.idx.squeeze(-1)      # (B, n_gt)
+    dist1, idx1 = dist_mat.transpose(1, 2).min(dim=2)  # (B, M), (B, M)
 
     # pred -> gt
-    knn_2 = knn_points(y_hat, y, K=1)
-    dist2 = knn_2.dists.squeeze(-1)   # (B, n_x)
-    idx2 = knn_2.idx.squeeze(-1)      # (B, n_x)
+    dist2, idx2 = dist_mat.min(dim=2)  # (B, N), (B, N)
 
-    exp_dist1 = torch.exp(-dist1 * alpha)
-    exp_dist2 = torch.exp(-dist2 * alpha)
+    exp_dist1 = torch.exp(-alpha * dist1)
+    exp_dist2 = torch.exp(-alpha * dist2)
 
-    count1 = torch.zeros(
-        batch_size, n_x, device=y_hat.device, dtype=idx1.dtype
-    )
-    count1.scatter_add_(1, idx1.long(), torch.ones_like(idx1))
-    weight1 = count1.gather(1, idx1.long()).float().detach() ** n_lambda
+    # Count how many gt points map to each pred point
+    count1 = torch.zeros(batch_size, n_x, device=device, dtype=y_hat.dtype)
+    count1.scatter_add_(1, idx1, torch.ones_like(dist1, dtype=y_hat.dtype))
+    weight1 = count1.gather(1, idx1).detach().pow(n_lambda)
     weight1 = (weight1 + 1e-6).pow(-1) * frac_21
     loss1 = (1.0 - exp_dist1 * weight1).mean(dim=1)
 
-    count2 = torch.zeros(
-        batch_size, n_gt, device=y_hat.device, dtype=idx2.dtype
-    )
-    count2.scatter_add_(1, idx2.long(), torch.ones_like(idx2))
-    weight2 = count2.gather(1, idx2.long()).float().detach() ** n_lambda
+    # Count how many pred points map to each gt point
+    count2 = torch.zeros(batch_size, n_gt, device=device, dtype=y_hat.dtype)
+    count2.scatter_add_(1, idx2, torch.ones_like(dist2, dtype=y_hat.dtype))
+    weight2 = count2.gather(1, idx2).detach().pow(n_lambda)
     weight2 = (weight2 + 1e-6).pow(-1) * frac_12
     loss2 = (1.0 - exp_dist2 * weight2).mean(dim=1)
 
-    loss = (loss1 + loss2) / 2
-    return loss.mean() 
+    loss = 0.5 * (loss1 + loss2)
+
+    if reduction == "mean":
+        return loss.mean()
+    elif reduction == "sum":
+        return loss.sum()
+    elif reduction == "none":
+        return loss
+    else:
+        raise ValueError(f"Unknown reduction '{reduction}'")
