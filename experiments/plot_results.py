@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from src.wandb_util import WandbHandler
 
@@ -119,7 +120,7 @@ def main():
     else:
         plot_convergence(rows, output_dir)
 
-    for plot_path in sorted(output_dir.glob("*.png")):
+    for plot_path in tqdm(sorted(output_dir.glob("*.png")), desc="Plot artifacts"):
         logger.log_artifact(plot_path, artifact_type="plot")
     logger.finish()
     print(f"Wrote plots to {output_dir}")

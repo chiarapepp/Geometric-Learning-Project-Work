@@ -3,6 +3,7 @@ from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from src.datasets.dataset_factory import build_pointcloud_transform, get_dataset
 from src.losses.loss_factory import get_loss
@@ -126,8 +127,21 @@ def benchmark_losses(
         name: get_loss(name, **loss_kwargs.get(name, {}))
         for name in losses
     }
+    corruption_bits = []
+    if noise_std > 0:
+        corruption_bits.append(f"noise={noise_std}")
+    if temporal_shuffle_fraction > 0:
+        corruption_bits.append(f"shuffle={temporal_shuffle_fraction}")
+    if drop_fraction > 0:
+        corruption_bits.append(f"drop={drop_fraction}")
+    corruption_desc = ", ".join(corruption_bits) if corruption_bits else "clean"
+    progress_desc = (
+        f"Benchmark batches [{dataset_name}/{split}, {corruption_desc}, "
+        f"max={max_batches}]"
+    )
 
-    for batch_idx, batch in enumerate(loader):
+    progress = tqdm(loader, total=min(max_batches, len(loader)), desc=progress_desc)
+    for batch_idx, batch in enumerate(progress):
         if batch_idx >= max_batches:
             break
         target = unpack_points(batch).to(device)
@@ -139,6 +153,8 @@ def benchmark_losses(
         )
 
         for loss_name, loss_fn in loss_functions.items():
+            progress.set_postfix(loss=loss_name)
+
             def run_loss():
                 return loss_fn(prediction, target)
 

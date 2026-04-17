@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 
 import torch
+from tqdm import tqdm
 
 from src.evaluate import DEFAULT_LOSSES, benchmark_losses, make_loader, write_csv
 from src.utils import set_seed
@@ -64,7 +65,7 @@ def main():
     loss_kwargs = {
         "temporal_weighted_chamfer": {"time_weight": args.loss_time_weight},
     }
-    for noise_std in args.noise_stds:
+    for noise_std in tqdm(args.noise_stds, desc="Noise levels"):
         rows.extend(
             benchmark_losses(
                 loader=loader,

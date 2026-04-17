@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import torch
+from tqdm import tqdm
 
 from src.evaluate import DEFAULT_LOSSES
 
@@ -49,7 +50,7 @@ def main():
     base_output_dir.mkdir(parents=True, exist_ok=True)
     aggregate_rows = []
 
-    for loss_name in args.losses:
+    for loss_name in tqdm(args.losses, desc="AE losses"):
         run_output_dir = base_output_dir / f"{args.dataset}_{args.model_name}_{loss_name}"
         base_run_name = args.wandb_run_name or f"convergence_{args.dataset}_{args.model_name}"
         run_name = f"{base_run_name}_{loss_name}"
