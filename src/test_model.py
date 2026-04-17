@@ -1,7 +1,7 @@
 import torch
 
-from models.pointnet_models import PointNetAE, PointNetVAE
-from models.pointnetpp_models import PointNetPPAE
+from src.models.pointnet_models import PointNetAE, PointNetVAE
+from src.models.pointnetpp_models import PointNetPPAE
 
 
 def test_pointnet_ae(device="cpu"):

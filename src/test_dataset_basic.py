@@ -1,8 +1,8 @@
 import argparse
 import torch
 
-from datasets.dataset_factory import get_dataset
-from datasets.transforms import (
+from src.datasets.dataset_factory import get_dataset
+from src.datasets.transforms import (
     Compose,
     EventsToXYTP,
     NormalizeXYT,

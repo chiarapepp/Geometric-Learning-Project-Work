@@ -1,13 +1,13 @@
 import torch
 
-from losses.chamfer_loss import chamfer_loss
-from losses.density_aware_chamfer_loss import density_aware_chamfer_loss
-from losses.emd_loss import emd_loss
-from losses.sinkhorn_loss import sinkhorn_loss
-from losses.temporal_weighted_chamfer_loss import temporal_weighted_chamfer_loss
-from losses.hausdorff_loss import hausdorff_loss
-from losses.projection_loss import projection_loss
-from losses.voxel_loss import voxel_loss
+from src.losses.chamfer_loss import chamfer_loss
+from src.losses.density_aware_chamfer_loss import density_aware_chamfer_loss
+from src.losses.emd_loss import emd_loss
+from src.losses.sinkhorn_loss import sinkhorn_loss
+from src.losses.temporal_weighted_chamfer_loss import temporal_weighted_chamfer_loss
+from src.losses.hausdorff_loss import hausdorff_loss
+from src.losses.projection_loss import projection_loss
+from src.losses.voxel_loss import voxel_loss
 
 
 def make_dummy_point_clouds(
