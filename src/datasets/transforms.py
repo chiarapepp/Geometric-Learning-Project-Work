@@ -550,6 +550,8 @@ class NormalizeXYT:
     x -> [0,1]
     y -> [0,1]
     t -> [0,1] then multiplied by temporal_weight
+
+    If sensor_size is None, x and y are normalized per sample with min/max.
     """
 
     def __init__(self, sensor_size, temporal_weight=1.0):
@@ -562,21 +564,31 @@ class NormalizeXYT:
         if points.ndim != 2 or points.shape[1] < 3:
             raise ValueError(f"Expected shape (N, >=3), got {points.shape}")
 
-        width = self.sensor_size[0]
-        height = self.sensor_size[1]
-
         if len(points) == 0:
             return points
 
-        if width > 1:
-            points[:, 0] = points[:, 0] / float(width - 1)
+        if self.sensor_size is None:
+            for dim in (0, 1):
+                dim_min = float(points[:, dim].min())
+                dim_max = float(points[:, dim].max())
+                dim_range = dim_max - dim_min
+                if dim_range > 1e-12:
+                    points[:, dim] = (points[:, dim] - dim_min) / dim_range
+                else:
+                    points[:, dim] = 0.0
         else:
-            points[:, 0] = 0.0
+            width = self.sensor_size[0]
+            height = self.sensor_size[1]
 
-        if height > 1:
-            points[:, 1] = points[:, 1] / float(height - 1)
-        else:
-            points[:, 1] = 0.0
+            if width > 1:
+                points[:, 0] = points[:, 0] / float(width - 1)
+            else:
+                points[:, 0] = 0.0
+
+            if height > 1:
+                points[:, 1] = points[:, 1] / float(height - 1)
+            else:
+                points[:, 1] = 0.0
 
         t_min = float(points[:, 2].min())
         t_max = float(points[:, 2].max())

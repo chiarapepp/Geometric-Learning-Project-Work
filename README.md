@@ -1,111 +1,230 @@
-# Geometric-Learning-Project-Work
+# Geometric Learning Project Work
 
-Research scaffold for the geometric learning project work on point-cloud reconstruction losses for neuromorphic data.
+Project work for testing point-cloud reconstruction losses on neuromorphic camera datasets.
 
-## What is implemented
+The goal is to compare losses commonly used for 3D point-cloud reconstruction and similarity measurement in a noisier event-camera setting, especially DVSGesture-128, plus NMNIST and NCaltech101.
 
-- Point-cloud conversion utilities for neuromorphic event streams.
-- Support for `DVSGesture`, `NMNIST`, and `SHD` through `tonic` when available.
-- A synthetic fallback dataset so the whole pipeline is runnable without external downloads.
-- Reconstruction losses:
-  - Chamfer Distance
-  - Density-Aware Chamfer Distance
-  - Sinkhorn approximation of Earth Mover Distance
-- Controlled perturbations for benchmarking:
-  - Gaussian noise
-  - Temporal shuffle
-- A PointNet-style autoencoder for convergence comparisons across losses.
-- A PointNet++-style autoencoder for hierarchical local-neighborhood encoding.
-- CLI scripts for benchmarking and training.
+## Implemented Components
 
-## Project structure
+- Dataset wrappers for:
+  - `dvsgesture`
+  - `nmnist`
+  - `ncaltech101`
+- Point-cloud preprocessing:
+  - raw tonic events to `[x, y, t, p]`
+  - optional `[x, y, t]`
+  - x/y/t normalization
+  - per-sample x/y normalization for NCaltech101
+  - fixed-size sampling/padding
+- Losses:
+  - Chamfer
+  - Density-Aware Chamfer
+  - Hungarian EMD
+  - Sinkhorn
+  - Temporal-weighted Chamfer
+  - Hausdorff
+  - Projection loss
+  - Voxel loss
+- Models:
+  - PointNet AE
+  - PointNet VAE
+  - PointNet++ AE
+- Experiment scripts:
+  - loss comparison
+  - noise robustness
+  - temporal shuffle sensitivity
+  - autoencoder convergence across losses
+  - simple CSV-to-PNG plotting
 
-- `src/data.py`: datasets, event-to-point-cloud conversion, corruptions
-- `src/losses.py`: reconstruction losses
-- `src/model.py`: PointNet autoencoder
-- `src/experiments.py`: benchmark and training workflows
-- `scripts/benchmark_losses.py`: benchmark losses on a dataset
-- `scripts/train_autoencoder.py`: train the autoencoder
-- `scripts/compare_autoencoder_losses.py`: compare convergence for several losses
-- `scripts/compare_models.py`: compare PointNet and PointNet++ across losses
-- `scripts/visualize_reconstruction.py`: save a target-vs-reconstruction plot
-- `scripts/smoke_test.py`: quick end-to-end sanity check
+## Install
 
-## Quick start
-
-Install the package in editable mode:
-
-```bash
-python -m pip install -e .
-```
-
-Run the synthetic smoke test:
-
-```bash
-python scripts/smoke_test.py
-```
-
-Benchmark the losses:
+Install PyTorch according to the cluster CUDA setup, then install the project dependencies:
 
 ```bash
-python scripts/benchmark_losses.py --dataset synthetic --split test
+python -m pip install -r requirements.txt
 ```
 
-Train the autoencoder:
+Run commands from the repository root.
+
+## Weights & Biases
+
+All training and benchmark scripts run with W&B disabled by default. Enable it with:
 
 ```bash
-python scripts/train_autoencoder.py --dataset synthetic --loss chamfer --epochs 10
+--wandb online --wandb-project geometric-learning-project
 ```
 
-Train the PointNet++ autoencoder:
+Optional fields:
 
 ```bash
-python scripts/train_autoencoder.py --dataset synthetic --model pointnet++ --loss chamfer --epochs 10
+--wandb-entity YOUR_ENTITY
+--wandb-run-name custom_run_name
+--wandb-group custom_group_name
 ```
 
-Compare convergence across multiple losses:
+Benchmark scripts log aggregate metrics, full result tables, and CSV artifacts. Training logs epoch metrics, history CSV artifacts, and the best checkpoint artifact.
+
+## Dataset Point Clouds
+
+The common transform is created by:
+
+```python
+build_pointcloud_transform(
+    dataset_name="dvsgesture",
+    num_points=1024,
+    input_dim=4,
+)
+```
+
+Use `input_dim=4` for `[x, y, t, p]` and `input_dim=3` for `[x, y, t]`.
+
+NCaltech101 has no official train/test split in tonic, so this project uses a deterministic 80/20 split with `split_seed=13`.
+
+## Loss Comparison
 
 ```bash
-python scripts/compare_autoencoder_losses.py --dataset synthetic --losses chamfer density_aware_chamfer sinkhorn_emd
+python -m experiments.loss_comparison \
+  --dataset dvsgesture \
+  --save-to ./data \
+  --losses chamfer density_aware_chamfer sinkhorn temporal_weighted_chamfer hausdorff \
+  --num-points 1024 \
+  --batch-size 8 \
+  --max-batches 20 \
+  --device cuda \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output outputs/benchmarks/dvsgesture_loss_comparison.csv
 ```
 
-Compare PointNet and PointNet++:
+Hungarian EMD is available as `emd`, but use fewer points:
 
 ```bash
-python scripts/compare_models.py --dataset synthetic --models pointnet pointnet++ --losses chamfer density_aware_chamfer
+python -m experiments.loss_comparison \
+  --dataset dvsgesture \
+  --losses emd chamfer \
+  --num-points 128 \
+  --batch-size 4 \
+  --max-batches 10 \
+  --device cuda \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output outputs/benchmarks/dvsgesture_emd_small.csv
 ```
 
-Visualize a reconstruction from a trained checkpoint:
+## Robustness Experiments
+
+Gaussian noise:
 
 ```bash
-python scripts/visualize_reconstruction.py --checkpoint outputs/autoencoder/synthetic_pointnet_chamfer_train.pt --model pointnet
+python -m experiments.noise_robustness \
+  --dataset dvsgesture \
+  --losses chamfer density_aware_chamfer sinkhorn temporal_weighted_chamfer hausdorff \
+  --noise-stds 0.0 0.01 0.03 0.05 0.1 \
+  --num-points 1024 \
+  --batch-size 8 \
+  --max-batches 20 \
+  --device cuda \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output outputs/benchmarks/dvsgesture_noise.csv
 ```
 
-## Tonic datasets
-
-For the course assignment, you will likely want `DVSGesture-128` plus one or two additional neuromorphic datasets. This code expects the `tonic` package for those datasets:
+Temporal shuffle:
 
 ```bash
-python -m pip install tonic
-python scripts/benchmark_losses.py --dataset dvsgesture --download
-python scripts/train_autoencoder.py --dataset dvsgesture --loss density_aware_chamfer --download
+python -m experiments.temporal_shuffle \
+  --dataset dvsgesture \
+  --losses chamfer density_aware_chamfer sinkhorn temporal_weighted_chamfer hausdorff \
+  --fractions 0.0 0.1 0.25 0.5 1.0 \
+  --num-points 1024 \
+  --batch-size 8 \
+  --max-batches 20 \
+  --device cuda \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output outputs/benchmarks/dvsgesture_temporal_shuffle.csv
 ```
 
-Supported dataset names:
+Repeat the same commands with `--dataset nmnist` and `--dataset ncaltech101`.
 
-- `dvsgesture`
-- `nmnist`
-- `shd`
+## Autoencoder Training
 
-## Outputs
+Single run:
 
-Generated artifacts are stored in:
+```bash
+python -m src.train_ae \
+  --dataset dvsgesture \
+  --model-name pointnet_ae \
+  --loss-name chamfer \
+  --num-points 1024 \
+  --input-dim 4 \
+  --epochs 50 \
+  --batch-size 16 \
+  --test-batch-size 16 \
+  --device cuda \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output-dir outputs/autoencoder/dvsgesture_pointnet_chamfer
+```
 
-- `outputs/benchmarks`: CSV and JSON benchmark summaries
-- `outputs/autoencoder`: training curves and model checkpoints
+Convergence comparison across losses:
 
-## Notes
+```bash
+python -m experiments.autoencoder_convergence \
+  --dataset dvsgesture \
+  --model-name pointnet_ae \
+  --losses chamfer density_aware_chamfer sinkhorn temporal_weighted_chamfer hausdorff \
+  --num-points 1024 \
+  --epochs 50 \
+  --batch-size 16 \
+  --device cuda \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output-dir outputs/autoencoder_convergence
+```
 
-- The Sinkhorn EMD implementation is a differentiable approximation and avoids external CUDA extensions.
-- The synthetic dataset exists so that development, debugging, and smoke testing do not depend on network access.
-- If you want, the next natural step is to add plotting/report notebooks for the final 10-15 minute presentation.
+This writes one history CSV per loss and an aggregate convergence CSV.
+
+## Plotting
+
+```bash
+python -m experiments.plot_results \
+  --input outputs/benchmarks/dvsgesture_loss_comparison.csv \
+  --kind loss_comparison \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output-dir outputs/plots
+
+python -m experiments.plot_results \
+  --input outputs/benchmarks/dvsgesture_noise.csv \
+  --kind noise \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output-dir outputs/plots
+
+python -m experiments.plot_results \
+  --input outputs/benchmarks/dvsgesture_temporal_shuffle.csv \
+  --kind temporal_shuffle \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output-dir outputs/plots
+
+python -m experiments.plot_results \
+  --input outputs/autoencoder_convergence/dvsgesture_pointnet_ae_convergence.csv \
+  --kind convergence \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --output-dir outputs/plots
+```
+
+## Suggested Final Results
+
+For the presentation, collect:
+
+- runtime and memory table by loss and dataset
+- noise robustness curves
+- temporal shuffle robustness curves
+- PointNet AE convergence curves across losses
+- optional PointNet VAE or PointNet++ comparison if cluster time allows
+
+Keep EMD small-point because Hungarian matching is expensive.

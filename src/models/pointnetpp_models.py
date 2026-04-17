@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.pointnetpp_utils import PointNetSetAbstraction
+from .pointnetpp_utils import PointNetSetAbstraction
 
 
 class LinearDecoder(nn.Module):

@@ -1,0 +1,8 @@
+torch
+numpy
+scipy
+tqdm
+tonic
+geomloss
+wandb
+matplotlib

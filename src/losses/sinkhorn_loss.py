@@ -1,5 +1,4 @@
 import torch
-from geomloss import SamplesLoss
 
 
 def sinkhorn_loss(
@@ -42,6 +41,8 @@ def sinkhorn_loss(
         raise ValueError(
             f"Point dimensions must match, got {y_hat.shape[2]} and {y.shape[2]}"
         )
+
+    from geomloss import SamplesLoss
 
     loss_fn = SamplesLoss(
         loss="sinkhorn",

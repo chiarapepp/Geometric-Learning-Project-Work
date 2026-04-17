@@ -1,6 +1,5 @@
 from collections.abc import Callable
 import numpy as np
-import tonic
 
 from .base_tonic_dataset import BaseTonicDataset
 
@@ -29,6 +28,8 @@ class NMNISTDataset(BaseTonicDataset):
         self.train = train
         self.first_saccade_only = first_saccade_only
         self.stabilize = stabilize
+
+        import tonic
 
         self.dataset = tonic.datasets.NMNIST(
             save_to=save_to,

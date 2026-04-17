@@ -1,6 +1,5 @@
 from collections.abc import Callable
 import numpy as np
-import tonic
 
 from .base_tonic_dataset import BaseTonicDataset
 
@@ -25,6 +24,8 @@ class DVSGestureDataset(BaseTonicDataset):
             transforms=transforms,
         )
         self.train = train
+
+        import tonic
 
         self.dataset = tonic.datasets.DVSGesture(save_to=save_to, train=train)
 

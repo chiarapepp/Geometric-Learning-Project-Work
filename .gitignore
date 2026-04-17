@@ -1,5 +1,6 @@
 data/
 draft/
+outputs/
 __pycache__/
 *.pyc
 *.pyo

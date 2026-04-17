@@ -1,6 +1,5 @@
 from collections.abc import Callable
 import numpy as np
-import tonic
 
 from .base_tonic_dataset import BaseTonicDataset
 
@@ -13,6 +12,9 @@ class NCaltech101Dataset(BaseTonicDataset):
     def __init__(
         self,
         save_to: str,
+        train: bool = True,
+        split_ratio: float = 0.8,
+        split_seed: int = 13,
         transform: Callable | None = None,
         target_transform: Callable | None = None,
         transforms: Callable | None = None,
@@ -24,13 +26,32 @@ class NCaltech101Dataset(BaseTonicDataset):
             transforms=transforms,
         )
 
-        self.dataset = tonic.datasets.NCALTECH101(save_to=save_to)
+        import tonic
 
-        self.data = list(range(len(self.dataset)))
-        self.targets = None
+        self.dataset = tonic.datasets.NCALTECH101(save_to=save_to)
+        self.train = train
+        self.split_ratio = split_ratio
+        self.split_seed = split_seed
+
+        all_indices = np.arange(len(self.dataset))
+        rng = np.random.default_rng(split_seed)
+        shuffled_indices = rng.permutation(all_indices)
+        split_index = int(round(split_ratio * len(shuffled_indices)))
+
+        if train:
+            self.indices = np.sort(shuffled_indices[:split_index])
+        else:
+            self.indices = np.sort(shuffled_indices[split_index:])
+
+        self.data = self.indices.tolist()
+        if getattr(self.dataset, "targets", None) is not None:
+            self.targets = [self.dataset.targets[i] for i in self.indices]
+        else:
+            self.targets = None
 
     def __getitem__(self, index):
-        events, target = self.dataset[index]
+        dataset_index = int(self.indices[index])
+        events, target = self.dataset[dataset_index]
 
         if self.transform is not None:
             events = self.transform(events)
@@ -42,7 +63,7 @@ class NCaltech101Dataset(BaseTonicDataset):
         return events, target
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.indices)
 
     def _check_exists(self):
         return True

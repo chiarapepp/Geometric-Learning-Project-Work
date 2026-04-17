@@ -1,13 +1,13 @@
 import torch
 
-from losses.chamfer_loss import chamfer_loss
-from losses.density_aware_chamfer_loss import density_aware_chamfer_loss
-from losses.emd_loss import emd_loss
-from losses.sinkhorn_loss import sinkhorn_loss
-from losses.temporal_weighted_chamfer_loss import temporal_weighted_chamfer_loss
-from losses.hausdorff_loss import hausdorff_loss
-from losses.projection_loss import projection_loss
-from losses.voxel_loss import voxel_loss
+from .chamfer_loss import chamfer_loss
+from .density_aware_chamfer_loss import density_aware_chamfer_loss
+from .emd_loss import emd_loss
+from .sinkhorn_loss import sinkhorn_loss
+from .temporal_weighted_chamfer_loss import temporal_weighted_chamfer_loss
+from .hausdorff_loss import hausdorff_loss
+from .projection_loss import projection_loss
+from .voxel_loss import voxel_loss
 
 
 def mse(y_hat, y):
@@ -40,7 +40,12 @@ def get_loss(loss_name, **kwargs):
     loss_name = loss_name.lower()
 
     if loss_name == "chamfer":
-        return chamfer_loss
+        return lambda y_hat, y: chamfer_loss(
+            y_hat,
+            y,
+            squared=kwargs.get("squared", True),
+            reduction=kwargs.get("reduction", "mean"),
+        )
 
     elif loss_name == "density_aware_chamfer":
         return lambda y_hat, y: density_aware_chamfer_loss(
