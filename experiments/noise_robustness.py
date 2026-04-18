@@ -27,6 +27,7 @@ def parse_args():
     parser.add_argument("--split-ratio", type=float, default=0.8)
     parser.add_argument("--split-seed", type=int, default=13)
     parser.add_argument("--loss-time-weight", type=float, default=1.0)
+    parser.add_argument("--sinkhorn-iterations-estimate", type=int, default=50)
     parser.add_argument("--wandb", default="disabled", choices=["online", "disabled"])
     parser.add_argument("--wandb-project", default="geometric-learning-project")
     parser.add_argument("--wandb-entity", default=None)
@@ -64,6 +65,7 @@ def main():
     rows = []
     loss_kwargs = {
         "temporal_weighted_chamfer": {"time_weight": args.loss_time_weight},
+        "sinkhorn": {"sinkhorn_iterations_estimate": args.sinkhorn_iterations_estimate},
     }
     for noise_std in tqdm(args.noise_stds, desc="Noise levels"):
         rows.extend(

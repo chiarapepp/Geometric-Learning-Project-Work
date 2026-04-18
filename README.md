@@ -35,6 +35,9 @@ The goal is to compare losses commonly used for 3D point-cloud reconstruction an
   - temporal shuffle sensitivity
   - autoencoder convergence across losses
   - simple CSV-to-PNG plotting
+- FLOP estimates:
+  - analytic per-loss forward-pass operation count
+  - estimated FLOP/s throughput from measured wall-clock time
 
 ## Install
 
@@ -63,6 +66,27 @@ Optional fields:
 ```
 
 Benchmark scripts log aggregate metrics, full result tables, and CSV artifacts. Training logs epoch metrics, history CSV artifacts, and the best checkpoint artifact.
+
+## FLOP Estimates
+
+Benchmark CSV files include:
+
+- `estimated_flops`: estimated floating-point operations for one forward loss evaluation on the batch
+- `estimated_flops_per_sample`: estimated operations divided by batch size
+- `estimated_flops_per_second`: estimated throughput from `estimated_flops / seconds`
+- `flops_method`: analytic estimate used for the specific loss
+
+These are implementation-level estimates intended for relative comparison between losses, point counts, and datasets. They are not exact hardware counters. For Sinkhorn, the estimate uses a default rough budget of 50 iterations because `geomloss` chooses the internal schedule dynamically. Override that reporting assumption with:
+
+```bash
+--sinkhorn-iterations-estimate 100
+```
+
+Quick local check:
+
+```bash
+python -m src.test_flops
+```
 
 ## Dataset Point Clouds
 
@@ -222,6 +246,7 @@ python -m experiments.plot_results \
 For the presentation, collect:
 
 - runtime and memory table by loss and dataset
+- estimated FLOPs and estimated GFLOP/s table by loss and dataset
 - noise robustness curves
 - temporal shuffle robustness curves
 - PointNet AE convergence curves across losses

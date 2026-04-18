@@ -128,6 +128,14 @@ class WandbHandler:
             metrics[f"{prefix}/mean_value"] = sum(values) / len(values)
             metrics[f"{prefix}/mean_seconds"] = sum(seconds) / len(seconds)
             metrics[f"{prefix}/peak_memory_mb"] = max(memory)
+            if "estimated_flops" in loss_rows[0]:
+                flops = [float(row["estimated_flops"]) for row in loss_rows]
+                metrics[f"{prefix}/mean_estimated_flops"] = sum(flops) / len(flops)
+            if "estimated_flops_per_second" in loss_rows[0]:
+                throughput = [float(row["estimated_flops_per_second"]) for row in loss_rows]
+                metrics[f"{prefix}/mean_estimated_flops_per_second"] = (
+                    sum(throughput) / len(throughput)
+                )
         self.log(metrics)
         self.log_table(table_name, rows)
         if csv_path is not None:

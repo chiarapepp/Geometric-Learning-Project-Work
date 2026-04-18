@@ -24,18 +24,36 @@ def mean(values):
 def plot_loss_comparison(rows, output_dir):
     values = defaultdict(list)
     times = defaultdict(list)
+    flops = defaultdict(list)
+    throughput = defaultdict(list)
     for row in rows:
         values[row["loss"]].append(row["value"])
         times[row["loss"]].append(row["seconds"])
+        if "estimated_flops" in row:
+            flops[row["loss"]].append(row["estimated_flops"])
+        if "estimated_flops_per_second" in row:
+            throughput[row["loss"]].append(row["estimated_flops_per_second"])
 
     losses = sorted(values)
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    include_flops = bool(flops)
+    if include_flops:
+        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+        axes = axes.flatten()
+    else:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     axes[0].bar(losses, [mean(values[loss]) for loss in losses])
     axes[0].set_title("Mean loss value")
     axes[0].tick_params(axis="x", rotation=35)
     axes[1].bar(losses, [mean(times[loss]) for loss in losses])
     axes[1].set_title("Mean execution time (s)")
     axes[1].tick_params(axis="x", rotation=35)
+    if include_flops:
+        axes[2].bar(losses, [mean(flops[loss]) / 1e9 for loss in losses])
+        axes[2].set_title("Estimated operations (GFLOPs)")
+        axes[2].tick_params(axis="x", rotation=35)
+        axes[3].bar(losses, [mean(throughput[loss]) / 1e9 for loss in losses])
+        axes[3].set_title("Estimated throughput (GFLOP/s)")
+        axes[3].tick_params(axis="x", rotation=35)
     fig.tight_layout()
     fig.savefig(output_dir / "loss_comparison.png", dpi=200)
     plt.close(fig)

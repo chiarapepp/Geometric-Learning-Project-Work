@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.datasets.dataset_factory import build_pointcloud_transform, get_dataset
+from src.flops import estimate_loss_flops
 from src.losses.loss_factory import get_loss
 from src.utils import cuda_peak_memory, ensure_dir, peak_memory_mb, time_call
 
@@ -154,6 +155,12 @@ def benchmark_losses(
 
         for loss_name, loss_fn in loss_functions.items():
             progress.set_postfix(loss=loss_name)
+            flop_estimate = estimate_loss_flops(
+                loss_name,
+                prediction,
+                target,
+                loss_kwargs=loss_kwargs.get(loss_name, {}),
+            )
 
             def run_loss():
                 return loss_fn(prediction, target)
@@ -161,6 +168,11 @@ def benchmark_losses(
             with cuda_peak_memory(device):
                 loss_value, seconds = time_call(run_loss, warmup=1, repeats=repeats, device=device)
                 memory = peak_memory_mb(device)
+            flops_per_second = (
+                float(flop_estimate.flops) / seconds
+                if seconds > 0 and flop_estimate.flops > 0
+                else 0.0
+            )
             rows.append(
                 {
                     "batch": batch_idx,
@@ -170,6 +182,10 @@ def benchmark_losses(
                     "value": float(loss_value.detach().cpu().item()),
                     "seconds": seconds,
                     "peak_memory_mb": memory,
+                    "estimated_flops": flop_estimate.flops,
+                    "estimated_flops_per_sample": flop_estimate.flops_per_sample,
+                    "estimated_flops_per_second": flops_per_second,
+                    "flops_method": flop_estimate.method,
                     "batch_size": int(target.shape[0]),
                     "num_points": int(target.shape[1]),
                     "point_dim": int(target.shape[2]),
