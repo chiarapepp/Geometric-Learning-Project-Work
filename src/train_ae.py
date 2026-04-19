@@ -50,6 +50,8 @@ class Config:
     log_every: int = 1
 
     output_dir: str = "./outputs/autoencoder"
+    save_every: int = 0
+    resume_from: str | None = None
     seed: int = 13
     split_ratio: float = 0.8
     split_seed: int = 13
@@ -115,6 +117,8 @@ def main():
     parser.add_argument("--wandb-job-type", default=Config.wandb_job_type)
     parser.add_argument("--wandb-tags", nargs="*", default=Config.wandb_tags)
     parser.add_argument("--output-dir", default=Config.output_dir)
+    parser.add_argument("--save-every", type=int, default=Config.save_every)
+    parser.add_argument("--resume-from", default=Config.resume_from)
     parser.add_argument("--seed", type=int, default=Config.seed)
     parser.add_argument("--split-ratio", type=float, default=Config.split_ratio)
     parser.add_argument("--split-seed", type=int, default=Config.split_seed)
@@ -146,6 +150,8 @@ def main():
         wandb_job_type=args.wandb_job_type,
         wandb_tags=args.wandb_tags,
         output_dir=args.output_dir,
+        save_every=args.save_every,
+        resume_from=args.resume_from,
         seed=args.seed,
         split_ratio=args.split_ratio,
         split_seed=args.split_seed,
@@ -213,13 +219,31 @@ def main():
 
     best_val = float("inf")
     best_checkpoint_path = None
+    start_epoch = 0
+    if cfg.resume_from is not None:
+        checkpoint = torch.load(cfg.resume_from, map_location=cfg.device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        if "optimizer_state_dict" in checkpoint:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        start_epoch = int(checkpoint.get("epoch", -1)) + 1
+        best_val = float(checkpoint.get("best_val_loss", best_val))
+        best_checkpoint_path = cfg.resume_from
+        print(f"Resumed from {cfg.resume_from} at epoch {start_epoch}")
+
     history_path = os.path.join(
         cfg.output_dir,
         f"{cfg.dataset}_{cfg.model_name}_{cfg.loss_name}_history.csv",
     )
     history_rows = []
+    if cfg.resume_from is not None and os.path.exists(history_path):
+        with open(history_path, "r", encoding="utf-8") as handle:
+            history_rows = list(csv.DictReader(handle))
 
-    for epoch in range(cfg.num_epochs):
+    logger.log({
+        "model/num_parameters": sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad),
+    })
+
+    for epoch in range(start_epoch, cfg.num_epochs):
         epoch_start = time.perf_counter()
         train_metrics = do_epoch_ae(
             loader=train_loader,
@@ -302,6 +326,27 @@ def main():
                 "epoch": epoch,
                 "val/best_loss": best_val,
             })
+
+        if cfg.save_every > 0 and (epoch + 1) % cfg.save_every == 0:
+            checkpoint_path = os.path.join(
+                cfg.output_dir,
+                f"{cfg.dataset}_{cfg.model_name}_{cfg.loss_name}_epoch_{epoch + 1}.pth",
+            )
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "best_val_loss": best_val,
+                    "config": cfg.__dict__,
+                },
+                checkpoint_path,
+            )
+            print(f"Saved periodic checkpoint to {checkpoint_path}")
+            logger.log_checkpoint(
+                checkpoint_path,
+                artifact_name=f"{cfg.dataset}_{cfg.model_name}_{cfg.loss_name}_epoch_{epoch + 1}",
+            )
 
     logger.log_artifact(history_path, artifact_type="training-history")
     if best_checkpoint_path is not None:

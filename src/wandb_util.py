@@ -83,6 +83,12 @@ class WandbHandler:
         if self.run is None:
             return
         import wandb
+        if hasattr(points, "detach"):
+            points = points.detach().cpu().numpy()
+        if getattr(points, "ndim", None) == 3:
+            points = points[0]
+        if getattr(points, "shape", (0, 0))[1] > 3:
+            points = points[:, :3]
         self.run.log({cloud_name: wandb.Object3D(points, caption=caption), 'it': it})
 
     def log_table(self, table_name, rows):
@@ -140,6 +146,36 @@ class WandbHandler:
         self.log_table(table_name, rows)
         if csv_path is not None:
             self.log_artifact(csv_path, artifact_type="benchmark-csv")
+
+    def log_reconstruction_eval_results(self, rows, csv_path=None, table_name="eval/results"):
+        if self.run is None:
+            return
+        if not rows:
+            return
+
+        grouped = {}
+        for row in rows:
+            key = (
+                row["corruption"],
+                row["corruption_level"],
+                row["metric"],
+            )
+            grouped.setdefault(key, []).append(row)
+
+        metrics = {}
+        for (corruption, level, metric_name), group_rows in grouped.items():
+            prefix = f"eval/{corruption}/{metric_name}/level_{level}"
+            recon_values = [float(row["reconstruction_value"]) for row in group_rows]
+            input_values = [float(row["corrupted_input_value"]) for row in group_rows]
+            seconds = [float(row["model_seconds"]) for row in group_rows]
+            metrics[f"{prefix}/mean_reconstruction"] = sum(recon_values) / len(recon_values)
+            metrics[f"{prefix}/mean_corrupted_input"] = sum(input_values) / len(input_values)
+            metrics[f"{prefix}/mean_model_seconds"] = sum(seconds) / len(seconds)
+
+        self.log(metrics)
+        self.log_table(table_name, rows)
+        if csv_path is not None:
+            self.log_artifact(csv_path, artifact_type="reconstruction-eval-csv")
 
     def log_checkpoint(self, checkpoint_path, artifact_name=None):
         if self.run is None:

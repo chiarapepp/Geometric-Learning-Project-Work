@@ -38,6 +38,7 @@ def parse_args():
     parser.add_argument("--wandb-group", default="autoencoder_convergence")
     parser.add_argument("--wandb-tags", nargs="*", default=None)
     parser.add_argument("--output-dir", default="outputs/autoencoder_convergence")
+    parser.add_argument("--save-every", type=int, default=0)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--split-ratio", type=float, default=0.8)
     parser.add_argument("--split-seed", type=int, default=13)
@@ -104,6 +105,8 @@ def main():
             "autoencoder_convergence",
             "--output-dir",
             str(run_output_dir),
+            "--save-every",
+            str(args.save_every),
             "--seed",
             str(args.seed),
             "--split-ratio",

@@ -67,6 +67,15 @@ Optional fields:
 
 Benchmark scripts log aggregate metrics, full result tables, and CSV artifacts. Training logs epoch metrics, history CSV artifacts, and the best checkpoint artifact.
 
+The main project workflow should use W&B for:
+
+- training curves: `train/loss`, `val/loss`, optional VAE `recon_loss` and `kl_loss`
+- model tracking: best checkpoint artifact and optional periodic checkpoint artifacts
+- trained-model corruption evaluation: reconstruction metrics under Gaussian noise, temporal shuffle, and random point drop
+- media: optional 3D point-cloud previews for target, corrupted input, and model reconstruction
+
+This is a reconstruction task, so there is no classification accuracy unless a classifier head is added. Use reconstruction metrics such as Chamfer, temporal-weighted Chamfer, Hausdorff, and MSE instead.
+
 ## FLOP Estimates
 
 Benchmark CSV files include:
@@ -188,6 +197,26 @@ python -m src.train_ae \
   --device cuda \
   --wandb online \
   --wandb-project geometric-learning-project \
+  --save-every 10 \
+  --output-dir outputs/autoencoder/dvsgesture_pointnet_chamfer
+```
+
+Resume a long run from a checkpoint:
+
+```bash
+python -m src.train_ae \
+  --dataset dvsgesture \
+  --model-name pointnet_ae \
+  --loss-name chamfer \
+  --num-points 1024 \
+  --input-dim 4 \
+  --epochs 50 \
+  --batch-size 16 \
+  --test-batch-size 16 \
+  --device cuda \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --resume-from outputs/autoencoder/dvsgesture_pointnet_chamfer/dvsgesture_pointnet_ae_chamfer_epoch_10.pth \
   --output-dir outputs/autoencoder/dvsgesture_pointnet_chamfer
 ```
 
@@ -204,10 +233,40 @@ python -m experiments.autoencoder_convergence \
   --device cuda \
   --wandb online \
   --wandb-project geometric-learning-project \
+  --save-every 10 \
   --output-dir outputs/autoencoder_convergence
 ```
 
 This writes one history CSV per loss and an aggregate convergence CSV.
+
+## Trained Reconstruction Evaluation
+
+After training, evaluate a saved model under controlled corruptions. This measures whether the trained autoencoder can reconstruct the clean target when its input is corrupted.
+
+```bash
+python -m experiments.reconstruction_corruption_eval \
+  --checkpoint outputs/autoencoder_convergence/dvsgesture_pointnet_ae_chamfer/dvsgesture_pointnet_ae_chamfer_best.pth \
+  --split test \
+  --metrics chamfer temporal_weighted_chamfer hausdorff mse \
+  --noise-stds 0.0 0.01 0.03 0.05 0.1 \
+  --temporal-shuffle-fractions 0.0 0.1 0.25 0.5 1.0 \
+  --drop-fractions 0.0 0.1 0.25 0.5 \
+  --max-batches 20 \
+  --device cuda \
+  --wandb online \
+  --wandb-project geometric-learning-project \
+  --log-media \
+  --output outputs/eval/dvsgesture_pointnet_ae_chamfer_corruptions.csv
+```
+
+The script logs:
+
+- `eval/.../mean_reconstruction`: metric between model reconstruction and clean target
+- `eval/.../mean_corrupted_input`: metric between corrupted input and clean target
+- `eval/results`: a full W&B table
+- a CSV artifact
+- PNG summary plots
+- optional 3D point-cloud previews when `--log-media` is set
 
 ## Plotting
 
