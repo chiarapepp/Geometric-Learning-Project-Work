@@ -2,6 +2,7 @@ import torch
 
 from .chamfer_loss import chamfer_loss
 from .density_aware_chamfer_loss import density_aware_chamfer_loss
+from .emd_cuda_loss import emd_cuda_loss
 from .emd_loss import emd_loss
 from .sinkhorn_loss import sinkhorn_loss
 from .temporal_weighted_chamfer_loss import temporal_weighted_chamfer_loss
@@ -61,6 +62,16 @@ def get_loss(loss_name, **kwargs):
             y_hat,
             y,
             reduction=kwargs.get("reduction", "mean"),
+        )
+
+    elif loss_name == "emd_cuda":
+        return lambda y_hat, y: emd_cuda_loss(
+            y_hat,
+            y,
+            eps=kwargs.get("eps", 0.005),
+            iterations=kwargs.get("iterations", 300),
+            reduction=kwargs.get("reduction", "mean"),
+            sqrt=kwargs.get("sqrt", True),
         )
 
     elif loss_name == "sinkhorn":

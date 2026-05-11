@@ -27,6 +27,15 @@ def parse_args():
     parser.add_argument("--save-to", default=None)
     parser.add_argument("--split", default="test", choices=["train", "test"])
     parser.add_argument("--metrics", nargs="+", default=DEFAULT_METRICS)
+    parser.add_argument(
+        "--metric-time-weight",
+        type=float,
+        default=None,
+        help=(
+            "Override the time weight used by the temporal_weighted_chamfer metric. "
+            "If omitted, the checkpoint loss_time_weight is used."
+        ),
+    )
     parser.add_argument("--noise-stds", nargs="+", type=float, default=[0.0, 0.01, 0.03, 0.05, 0.1])
     parser.add_argument("--temporal-shuffle-fractions", nargs="+", type=float, default=[0.0, 0.1, 0.25, 0.5, 1.0])
     parser.add_argument("--drop-fractions", nargs="+", type=float, default=[0.0, 0.1, 0.25, 0.5])
@@ -199,10 +208,23 @@ def main():
         batch_size=cfg.test_batch_size,
         num_workers=cfg.num_workers,
         temporal_weight=cfg.temporal_weight,
+        sample_mode=cfg.sample_mode,
+        pad_mode=cfg.pad_mode,
+        shuffle_points=cfg.shuffle_points,
         split_ratio=cfg.split_ratio,
         split_seed=cfg.split_seed,
+        stream_mode=cfg.stream_mode,
+        window_size=cfg.window_size,
+        window_stride=cfg.window_stride,
+        window_drop_last=cfg.window_drop_last,
+        max_windows_per_sample=cfg.max_windows_per_sample,
     )
-    metric_functions = build_metric_functions(args.metrics, cfg.loss_time_weight)
+    metric_time_weight = (
+        args.metric_time_weight
+        if args.metric_time_weight is not None
+        else cfg.loss_time_weight
+    )
+    metric_functions = build_metric_functions(args.metrics, metric_time_weight)
 
     rows = []
     specs = corruption_specs(args)
@@ -248,6 +270,7 @@ def main():
                             "temporal_shuffle_fraction": spec["temporal_shuffle_fraction"],
                             "drop_fraction": spec["drop_fraction"],
                             "metric": metric_name,
+                            "metric_time_weight": metric_time_weight if metric_name == "temporal_weighted_chamfer" else "",
                             "reconstruction_value": float(reconstruction_value.detach().cpu().item()),
                             "corrupted_input_value": float(corrupted_input_value.detach().cpu().item()),
                             "model_seconds": model_seconds,

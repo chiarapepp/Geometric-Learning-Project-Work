@@ -35,6 +35,9 @@ class Config:
     latent_dim: int = 256
     decoder_hidden_dim: int = 512
     temporal_weight: float = 1.0
+    sample_mode: str = "random"
+    pad_mode: str = "repeat"
+    shuffle_points: bool = True
 
     loss_name: str = "chamfer"
     loss_time_weight: float = 1.0
@@ -55,6 +58,11 @@ class Config:
     seed: int = 13
     split_ratio: float = 0.8
     split_seed: int = 13
+    stream_mode: str = "sample"
+    window_size: int | None = None
+    window_stride: int | None = None
+    window_drop_last: bool = True
+    max_windows_per_sample: int | None = None
 
 
 def build_model(cfg):
@@ -99,6 +107,9 @@ def main():
     parser.add_argument("--num-points", type=int, default=Config.num_points)
     parser.add_argument("--input-dim", type=int, default=Config.input_dim, choices=[3, 4])
     parser.add_argument("--temporal-weight", type=float, default=Config.temporal_weight)
+    parser.add_argument("--sample-mode", default=Config.sample_mode, choices=["random", "uniform", "first"])
+    parser.add_argument("--pad-mode", default=Config.pad_mode, choices=["repeat", "zeros"])
+    parser.add_argument("--no-shuffle-points", action="store_true")
     parser.add_argument("--epochs", type=int, default=Config.num_epochs)
     parser.add_argument("--batch-size", type=int, default=Config.train_batch_size)
     parser.add_argument("--test-batch-size", type=int, default=Config.test_batch_size)
@@ -122,6 +133,11 @@ def main():
     parser.add_argument("--seed", type=int, default=Config.seed)
     parser.add_argument("--split-ratio", type=float, default=Config.split_ratio)
     parser.add_argument("--split-seed", type=int, default=Config.split_seed)
+    parser.add_argument("--stream-mode", default=Config.stream_mode, choices=["sample", "windowed"])
+    parser.add_argument("--window-size", type=int, default=Config.window_size)
+    parser.add_argument("--window-stride", type=int, default=Config.window_stride)
+    parser.add_argument("--keep-last-window", action="store_true")
+    parser.add_argument("--max-windows-per-sample", type=int, default=Config.max_windows_per_sample)
     args = parser.parse_args()
 
     cfg = Config(
@@ -139,6 +155,9 @@ def main():
         latent_dim=args.latent_dim,
         decoder_hidden_dim=args.decoder_hidden_dim,
         temporal_weight=args.temporal_weight,
+        sample_mode=args.sample_mode,
+        pad_mode=args.pad_mode,
+        shuffle_points=not args.no_shuffle_points,
         loss_name=args.loss_name,
         loss_time_weight=args.loss_time_weight,
         kl_weight=args.kl_weight,
@@ -155,6 +174,11 @@ def main():
         seed=args.seed,
         split_ratio=args.split_ratio,
         split_seed=args.split_seed,
+        stream_mode=args.stream_mode,
+        window_size=args.window_size,
+        window_stride=args.window_stride,
+        window_drop_last=not args.keep_last_window,
+        max_windows_per_sample=args.max_windows_per_sample,
     )
     if cfg.wandb_run_name is None:
         cfg.wandb_run_name = f"convergence_{cfg.dataset}_{cfg.model_name}_{cfg.loss_name}"
@@ -172,6 +196,9 @@ def main():
         num_points=cfg.num_points,
         input_dim=cfg.input_dim,
         temporal_weight=cfg.temporal_weight,
+        sample_mode=cfg.sample_mode,
+        pad_mode=cfg.pad_mode,
+        shuffle=cfg.shuffle_points,
     )
 
     train_dataset = get_dataset(
@@ -181,6 +208,11 @@ def main():
         transform=transform,
         split_ratio=cfg.split_ratio,
         split_seed=cfg.split_seed,
+        stream_mode=cfg.stream_mode,
+        window_size=cfg.window_size,
+        window_stride=cfg.window_stride,
+        window_drop_last=cfg.window_drop_last,
+        max_windows_per_sample=cfg.max_windows_per_sample,
     )
 
     val_dataset = get_dataset(
@@ -190,6 +222,11 @@ def main():
         transform=transform,
         split_ratio=cfg.split_ratio,
         split_seed=cfg.split_seed,
+        stream_mode=cfg.stream_mode,
+        window_size=cfg.window_size,
+        window_stride=cfg.window_stride,
+        window_drop_last=cfg.window_drop_last,
+        max_windows_per_sample=cfg.max_windows_per_sample,
     )
 
     train_loader = DataLoader(

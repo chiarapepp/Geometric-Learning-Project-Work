@@ -8,11 +8,20 @@ from src.datasets.transforms import (
     NormalizeXYT,
     DropPolarity,
     SamplePoints,
+    ShufflePoints,
     ToTensor,
 )
 
 
-def build_transform(sensor_size, num_points=1024, use_polarity=False, temporal_weight=1.0):
+def build_transform(
+    sensor_size,
+    num_points=1024,
+    use_polarity=False,
+    temporal_weight=1.0,
+    sample_mode="random",
+    pad_mode="repeat",
+    shuffle_points=True,
+):
     transforms = [
         EventsToXYTP(),
         NormalizeXYT(sensor_size=sensor_size, temporal_weight=temporal_weight),
@@ -21,11 +30,10 @@ def build_transform(sensor_size, num_points=1024, use_polarity=False, temporal_w
     if not use_polarity:
         transforms.append(DropPolarity())
 
-    transforms.extend([
-        SamplePoints(num_points=num_points, mode="random", pad_mode="repeat"),
-        ToTensor(),
-    ])
-
+    transforms.append(SamplePoints(num_points=num_points, mode=sample_mode, pad_mode=pad_mode))
+    if shuffle_points:
+        transforms.append(ShufflePoints())
+    transforms.append(ToTensor())
     return Compose(transforms)
 
 
@@ -50,6 +58,14 @@ def main():
     parser.add_argument("--num_points", type=int, default=1024)
     parser.add_argument("--use_polarity", action="store_true")
     parser.add_argument("--temporal_weight", type=float, default=1.0)
+    parser.add_argument("--sample_mode", default="random", choices=["random", "uniform", "first"])
+    parser.add_argument("--pad_mode", default="repeat", choices=["repeat", "zeros"])
+    parser.add_argument("--no_shuffle_points", action="store_true")
+    parser.add_argument("--stream_mode", default="sample", choices=["sample", "windowed"])
+    parser.add_argument("--window_size", type=int, default=None)
+    parser.add_argument("--window_stride", type=int, default=None)
+    parser.add_argument("--keep_last_window", action="store_true")
+    parser.add_argument("--max_windows_per_sample", type=int, default=None)
     parser.add_argument("--index", type=int, default=0)
     args = parser.parse_args()
 
@@ -60,6 +76,9 @@ def main():
         num_points=args.num_points,
         use_polarity=args.use_polarity,
         temporal_weight=args.temporal_weight,
+        sample_mode=args.sample_mode,
+        pad_mode=args.pad_mode,
+        shuffle_points=not args.no_shuffle_points,
     )
 
     dataset = get_dataset(
@@ -67,6 +86,11 @@ def main():
         save_to=args.save_to,
         train=args.train,
         transform=transform,
+        stream_mode=args.stream_mode,
+        window_size=args.window_size,
+        window_stride=args.window_stride,
+        window_drop_last=not args.keep_last_window,
+        max_windows_per_sample=args.max_windows_per_sample,
     )
 
     print(f"Dataset: {args.dataset}")

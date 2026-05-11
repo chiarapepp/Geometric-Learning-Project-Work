@@ -119,6 +119,13 @@ def estimate_loss_flops(
         flops = pairwise + assignment_cost + matched_mean
         return FlopEstimate.make(flops, "analytic_emd_with_cubic_assignment", batch_size)
 
+    if name == "emd_cuda":
+        iterations = int(loss_kwargs.get("iterations", 300))
+        matching_updates = iterations * batch_size * n_pred * n_target * 4
+        matched_mean = batch_size * max(n_pred - 1, 0)
+        flops = pairwise + matching_updates + matched_mean
+        return FlopEstimate.make(flops, f"rough_cuda_approx_emd_{iterations}_iterations", batch_size)
+
     if name == "sinkhorn":
         iterations = int(loss_kwargs.get("sinkhorn_iterations_estimate", 50))
         cost_matrix = pairwise

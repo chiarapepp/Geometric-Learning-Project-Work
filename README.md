@@ -113,6 +113,37 @@ Use `input_dim=4` for `[x, y, t, p]` and `input_dim=3` for `[x, y, t]`.
 
 NCaltech101 has no official train/test split in tonic, so this project uses a deterministic 80/20 split with `split_seed=13`.
 
+### Event-Stream Windowing
+
+By default, each tonic sample is converted to one normalized fixed-size point cloud. To follow the reference EventCloudReconstruction-style stream loading more closely, enable event-count windows:
+
+```bash
+python -m experiments.loss_comparison \
+  --dataset dvsgesture \
+  --stream-mode windowed \
+  --window-size 5000 \
+  --window-stride 2500 \
+  --num-points 1024 \
+  --max-windows-per-sample 20
+```
+
+This slices each raw event stream into windows before point-cloud normalization and sampling. The model still receives fixed-size tensors, but each tensor represents a local temporal segment rather than the whole sample.
+
+For the closest match to the reference loading configuration (`slice_size=4096`, `stride=-1`, `use_polarity=False`), keep every event in the window and preserve point order:
+
+```bash
+python -m src.train_ae \
+  --dataset dvsgesture \
+  --model-name pointnet_ae \
+  --loss-name chamfer \
+  --stream-mode windowed \
+  --window-size 4096 \
+  --window-stride 4096 \
+  --num-points 4096 \
+  --input-dim 3 \
+  --no-shuffle-points
+```
+
 ## Loss Comparison
 
 ```bash
@@ -142,6 +173,32 @@ python -m experiments.loss_comparison \
   --wandb online \
   --wandb-project geometric-learning-project \
   --output outputs/benchmarks/dvsgesture_emd_small.csv
+```
+
+An optional CUDA approximation from `meder411/PyTorch-EMDLoss` is exposed as
+`emd_cuda`. Install that external CUDA extension in the active environment first,
+then run the synthetic smoke benchmark:
+
+```bash
+python -m experiments.emd_cuda_benchmark \
+  --losses emd_cuda emd sinkhorn \
+  --num-points 128 \
+  --batch-size 2 \
+  --device cuda \
+  --output outputs/benchmarks/emd_cuda_synthetic.csv
+```
+
+You can also include it in the dataset benchmark:
+
+```bash
+python -m experiments.loss_comparison \
+  --dataset dvsgesture \
+  --losses emd_cuda emd sinkhorn \
+  --num-points 128 \
+  --batch-size 4 \
+  --max-batches 10 \
+  --device cuda \
+  --output outputs/benchmarks/dvsgesture_emd_cuda_small.csv
 ```
 
 ## Robustness Experiments

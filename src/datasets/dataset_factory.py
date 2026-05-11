@@ -1,6 +1,7 @@
 from .dvs_gesture_dataset import DVSGestureDataset
 from .nmnist_dataset import NMNISTDataset
 from .ncaltech101_dataset import NCaltech101Dataset
+from .windowed_event_dataset import WindowedEventDataset
 from .transforms import (
     Compose,
     EventsToXYTP,
@@ -58,39 +59,61 @@ def get_dataset(
     transform=None,
     target_transform=None,
     transforms=None,
+    stream_mode: str = "sample",
+    window_size: int | None = None,
+    window_stride: int | None = None,
+    window_drop_last: bool = True,
+    window_sort_by_time: bool = True,
+    max_windows_per_sample: int | None = None,
     **kwargs,
 ):
     name = dataset_name.lower()
+    stream_mode = stream_mode.lower()
+    if stream_mode not in {"sample", "windowed"}:
+        raise ValueError("stream_mode must be 'sample' or 'windowed'")
 
     if name == "dvsgesture":
-        return DVSGestureDataset(
+        dataset = DVSGestureDataset(
             save_to=save_to,
             train=train,
-            transform=transform,
-            target_transform=target_transform,
-            transforms=transforms,
         )
 
-    if name == "nmnist":
-        return NMNISTDataset(
+    elif name == "nmnist":
+        dataset = NMNISTDataset(
             save_to=save_to,
             train=train,
             first_saccade_only=kwargs.get("first_saccade_only", False),
             stabilize=kwargs.get("stabilize", False),
-            transform=transform,
-            target_transform=target_transform,
-            transforms=transforms,
         )
 
-    if name == "ncaltech101":
-        return NCaltech101Dataset(
+    elif name == "ncaltech101":
+        dataset = NCaltech101Dataset(
             save_to=save_to,
             train=train,
             split_ratio=kwargs.get("split_ratio", 0.8),
             split_seed=kwargs.get("split_seed", 13),
-            transform=transform,
-            target_transform=target_transform,
-            transforms=transforms,
         )
 
-    raise ValueError(f"Unknown dataset: {dataset_name}")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
+
+    if stream_mode == "sample":
+        dataset.transform = transform
+        dataset.target_transform = target_transform
+        dataset.transforms = transforms
+        return dataset
+
+    if window_size is None:
+        raise ValueError("window_size is required when stream_mode='windowed'")
+
+    return WindowedEventDataset(
+        dataset=dataset,
+        window_size=window_size,
+        stride=window_stride,
+        transform=transform,
+        target_transform=target_transform,
+        transforms=transforms,
+        drop_last=window_drop_last,
+        sort_by_time=window_sort_by_time,
+        max_windows_per_sample=max_windows_per_sample,
+    )

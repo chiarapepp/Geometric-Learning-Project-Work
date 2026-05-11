@@ -8,6 +8,7 @@ from src.datasets.transforms import (
     NormalizeXYT,
     DropPolarity,
     SamplePoints,
+    ShufflePoints,
     ToTensor,
 )
 
@@ -23,14 +24,23 @@ def infer_sensor_size(dataset_name: str):
     raise ValueError(f"Unknown dataset: {dataset_name}")
 
 
-def build_transform(sensor_size, num_points=1024):
-    return Compose([
+def build_transform(
+    sensor_size,
+    num_points=1024,
+    sample_mode="random",
+    pad_mode="repeat",
+    shuffle_points=True,
+):
+    transforms = [
         EventsToXYTP(),
         NormalizeXYT(sensor_size=sensor_size, temporal_weight=1.0),
         DropPolarity(),
-        SamplePoints(num_points=num_points, mode="random", pad_mode="repeat"),
-        ToTensor(),
-    ])
+        SamplePoints(num_points=num_points, mode=sample_mode, pad_mode=pad_mode),
+    ]
+    if shuffle_points:
+        transforms.append(ShufflePoints())
+    transforms.append(ToTensor())
+    return Compose(transforms)
 
 
 def main():
@@ -41,16 +51,35 @@ def main():
     parser.add_argument("--num_points", type=int, default=1024)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_workers", type=int, default=0)
+    parser.add_argument("--sample_mode", default="random", choices=["random", "uniform", "first"])
+    parser.add_argument("--pad_mode", default="repeat", choices=["repeat", "zeros"])
+    parser.add_argument("--no_shuffle_points", action="store_true")
+    parser.add_argument("--stream_mode", default="sample", choices=["sample", "windowed"])
+    parser.add_argument("--window_size", type=int, default=None)
+    parser.add_argument("--window_stride", type=int, default=None)
+    parser.add_argument("--keep_last_window", action="store_true")
+    parser.add_argument("--max_windows_per_sample", type=int, default=None)
     args = parser.parse_args()
 
     sensor_size = infer_sensor_size(args.dataset)
-    transform = build_transform(sensor_size=sensor_size, num_points=args.num_points)
+    transform = build_transform(
+        sensor_size=sensor_size,
+        num_points=args.num_points,
+        sample_mode=args.sample_mode,
+        pad_mode=args.pad_mode,
+        shuffle_points=not args.no_shuffle_points,
+    )
 
     dataset = get_dataset(
         dataset_name=args.dataset,
         save_to=args.save_to,
         train=args.train,
         transform=transform,
+        stream_mode=args.stream_mode,
+        window_size=args.window_size,
+        window_stride=args.window_stride,
+        window_drop_last=not args.keep_last_window,
+        max_windows_per_sample=args.max_windows_per_sample,
     )
 
     loader = DataLoader(

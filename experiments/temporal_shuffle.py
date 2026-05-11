@@ -17,6 +17,9 @@ def parse_args():
     parser.add_argument("--fractions", nargs="+", type=float, default=[0.0, 0.1, 0.25, 0.5, 1.0])
     parser.add_argument("--num-points", type=int, default=1024)
     parser.add_argument("--input-dim", type=int, default=4, choices=[3, 4])
+    parser.add_argument("--sample-mode", default="random", choices=["random", "uniform", "first"])
+    parser.add_argument("--pad-mode", default="repeat", choices=["repeat", "zeros"])
+    parser.add_argument("--no-shuffle-points", action="store_true")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--max-batches", type=int, default=10)
@@ -26,6 +29,11 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--split-ratio", type=float, default=0.8)
     parser.add_argument("--split-seed", type=int, default=13)
+    parser.add_argument("--stream-mode", default="sample", choices=["sample", "windowed"])
+    parser.add_argument("--window-size", type=int, default=None)
+    parser.add_argument("--window-stride", type=int, default=None)
+    parser.add_argument("--keep-last-window", action="store_true")
+    parser.add_argument("--max-windows-per-sample", type=int, default=None)
     parser.add_argument("--loss-time-weight", type=float, default=1.0)
     parser.add_argument("--sinkhorn-iterations-estimate", type=int, default=50)
     parser.add_argument("--wandb", default="disabled", choices=["online", "disabled"])
@@ -59,8 +67,16 @@ def main():
         input_dim=args.input_dim,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        sample_mode=args.sample_mode,
+        pad_mode=args.pad_mode,
+        shuffle_points=not args.no_shuffle_points,
         split_ratio=args.split_ratio,
         split_seed=args.split_seed,
+        stream_mode=args.stream_mode,
+        window_size=args.window_size,
+        window_stride=args.window_stride,
+        window_drop_last=not args.keep_last_window,
+        max_windows_per_sample=args.max_windows_per_sample,
     )
     rows = []
     loss_kwargs = {

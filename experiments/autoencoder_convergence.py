@@ -21,6 +21,9 @@ def parse_args():
     parser.add_argument("--num-points", type=int, default=1024)
     parser.add_argument("--input-dim", type=int, default=4, choices=[3, 4])
     parser.add_argument("--temporal-weight", type=float, default=1.0)
+    parser.add_argument("--sample-mode", default="random", choices=["random", "uniform", "first"])
+    parser.add_argument("--pad-mode", default="repeat", choices=["repeat", "zeros"])
+    parser.add_argument("--no-shuffle-points", action="store_true")
     parser.add_argument("--loss-time-weight", type=float, default=1.0)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=16)
@@ -42,6 +45,11 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--split-ratio", type=float, default=0.8)
     parser.add_argument("--split-seed", type=int, default=13)
+    parser.add_argument("--stream-mode", default="sample", choices=["sample", "windowed"])
+    parser.add_argument("--window-size", type=int, default=None)
+    parser.add_argument("--window-stride", type=int, default=None)
+    parser.add_argument("--keep-last-window", action="store_true")
+    parser.add_argument("--max-windows-per-sample", type=int, default=None)
     return parser.parse_args()
 
 
@@ -73,6 +81,10 @@ def main():
             str(args.input_dim),
             "--temporal-weight",
             str(args.temporal_weight),
+            "--sample-mode",
+            args.sample_mode,
+            "--pad-mode",
+            args.pad_mode,
             "--loss-time-weight",
             str(args.loss_time_weight),
             "--epochs",
@@ -113,7 +125,19 @@ def main():
             str(args.split_ratio),
             "--split-seed",
             str(args.split_seed),
+            "--stream-mode",
+            args.stream_mode,
         ]
+        if args.window_size is not None:
+            command.extend(["--window-size", str(args.window_size)])
+        if args.window_stride is not None:
+            command.extend(["--window-stride", str(args.window_stride)])
+        if args.keep_last_window:
+            command.append("--keep-last-window")
+        if args.max_windows_per_sample is not None:
+            command.extend(["--max-windows-per-sample", str(args.max_windows_per_sample)])
+        if args.no_shuffle_points:
+            command.append("--no-shuffle-points")
         if args.wandb_entity is not None:
             command.extend(["--wandb-entity", args.wandb_entity])
         if args.wandb_tags:

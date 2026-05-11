@@ -19,7 +19,7 @@ DEFAULT_LOSSES = [
     "hausdorff",
 ]
 
-ALL_LOSSES = DEFAULT_LOSSES + ["emd", "projection", "voxel"]
+ALL_LOSSES = DEFAULT_LOSSES + ["emd", "emd_cuda", "projection", "voxel"]
 
 
 def make_loader(
@@ -36,6 +36,11 @@ def make_loader(
     shuffle_points=True,
     split_ratio=0.8,
     split_seed=13,
+    stream_mode="sample",
+    window_size=None,
+    window_stride=None,
+    window_drop_last=True,
+    max_windows_per_sample=None,
 ):
     train = split == "train"
     transform = build_pointcloud_transform(
@@ -54,6 +59,11 @@ def make_loader(
         transform=transform,
         split_ratio=split_ratio,
         split_seed=split_seed,
+        stream_mode=stream_mode,
+        window_size=window_size,
+        window_stride=window_stride,
+        window_drop_last=window_drop_last,
+        max_windows_per_sample=max_windows_per_sample,
     )
     return DataLoader(
         dataset,

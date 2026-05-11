@@ -1,0 +1,13 @@
+/TRAININGS
+*__pycache__/
+*__pycache__/*
+comet_key.txt
+environment.yml
+/src/images/*
+/InfoCD
+/darts_logs
+data
+.idea
+src/out_frames
+*.pth
+/wandb
