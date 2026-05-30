@@ -170,15 +170,73 @@ def expected_losses(args):
     return losses
 
 
-def parse_identity(text, datasets, models, losses):
-    lower = str(text).replace("\\", "/").lower()
+def parse_identity(path, datasets=None, models=None, losses=None):
+    name = Path(path).name.lower()
+
+    # Remove common suffixes.
+    for suffix in ["_history.csv", "_best.pth", "_corruptions.csv"]:
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+
+    # Remove epoch suffix, e.g. _epoch_50.pth
+    if "_epoch_" in name and name.endswith(".pth"):
+        name = name.rsplit("_epoch_", 1)[0]
+
+    if "." in name:
+        name = Path(name).stem
+
+    datasets = list(datasets or ["ncaltech101", "dvsgesture", "nmnist"])
+    models = list(models or ["pointnetpp_ae", "pointnet_ae"])
+    losses = list(
+        losses
+        or [
+            "density_aware_chamfer",
+            "temporal_weighted_chamfer",
+            "chamfer",
+            "hausdorff",
+            "sinkhorn",
+            "projection",
+            "voxel",
+            "chamfer_squared",
+            "repulsion_chamfer",
+        ]
+    )
+
+    known_losses = [
+        "density_aware_chamfer",
+        "temporal_weighted_chamfer",
+        "chamfer",
+        "hausdorff",
+        "sinkhorn",
+        "projection",
+        "voxel",
+        "chamfer_squared",
+        "repulsion_chamfer",
+        "emd",
+    ]
+    for loss_name in known_losses:
+        if loss_name not in losses:
+            losses.append(loss_name)
+
     for dataset in datasets:
         for alias in dataset_aliases(dataset):
+            prefix = alias.lower() + "_"
+            if not name.startswith(prefix):
+                continue
+
+            rest = name[len(prefix) :]
+
             for model in sorted(models, key=len, reverse=True):
+                model_prefix = model.lower() + "_"
+                if not rest.startswith(model_prefix):
+                    continue
+
+                loss_part = rest[len(model_prefix) :]
+
                 for loss_name in sorted(losses, key=len, reverse=True):
-                    token = f"{alias}_{model}_{loss_name}".lower()
-                    if token in lower:
+                    if loss_part == loss_name or loss_part.startswith(loss_name + "_"):
                         return dataset, model, loss_name
+
     return None, None, None
 
 
