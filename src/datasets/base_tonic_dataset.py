@@ -7,23 +7,23 @@ class BaseTonicDataset(Dataset):
     """
     Minimal base class for neuromorphic datasets.
 
-    Child classes should:
+    The classes should:
     - populate self.data and self.targets
     - implement __getitem__
     - implement _check_exists
     - optionally implement download
     """
 
-    sensor_size = None
+    sensor_size = None           # class attributes
     dtype = None
     ordering = None
 
     def __init__(
         self,
-        save_to: str,
-        transform: Callable | None = None,
+        save_to: str,            # where to save the dataset on the system
+        transform: Callable | None = None,   
         target_transform: Callable | None = None,
-        transforms: Callable | None = None,
+        transforms: Callable | None = None,   # could act on both data and targets
     ):
         super().__init__()
         self.location_on_system = os.path.join(
