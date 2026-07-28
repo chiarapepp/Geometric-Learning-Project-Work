@@ -1,0 +1,8 @@
+| dataset | model | metric | mean_clean_reconstruction | mean_corruption_degradation | mean_model_seconds | num_clean_groups | num_corruption_groups |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dvsgesture | pointnet_ae | chamfer | 0.006813 | 6.9614e-05 | 0.091911 | 5 | 55 |
+| dvsgesture | pointnetpp_ae | chamfer | 0.005939 | -4.3223e-05 | 0.71315 | 4 | 44 |
+| ncaltech101 | pointnet_ae | chamfer | 0.005179 | 1.4673e-04 | 0.142982 | 5 | 55 |
+| ncaltech101 | pointnetpp_ae | chamfer | 0.005292 | 6.8708e-05 | 0.111348 | 5 | 55 |
+| nmnist | pointnet_ae | chamfer | 0.016612 | 2.3603e-04 | 0.265802 | 4 | 44 |
+| nmnist | pointnetpp_ae | chamfer | 0.004999 | 5.1916e-04 | 0.497207 | 4 | 44 |

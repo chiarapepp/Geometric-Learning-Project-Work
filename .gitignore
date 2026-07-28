@@ -1,7 +1,10 @@
 data/
 draft/
 wandb/
-outputs/
+# Keep raw experiment artifacts local; version only curated final outputs.
+outputs/*
+!outputs/final/
+!outputs/final/**
 __pycache__/
 *.pyc
 *.pyo
@@ -9,3 +12,16 @@ __pycache__/
 *.db
 *.sqlite3
 *.log
+*.out
+*.err
+.codex_pycache/
+.wandb_local/
+slurm_runs/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pt
+*.pth
+*.ckpt
+slurm/

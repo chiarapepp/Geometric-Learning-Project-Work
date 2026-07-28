@@ -1,0 +1,17 @@
+| dataset | loss | protocol | mean_value | std_value | mean_seconds | std_seconds | mean_peak_memory_mb | mean_estimated_gflops | mean_estimated_gflops_per_second | num_rows |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| dvsgesture | chamfer | clean | 4.8950e-08 | 1.6176e-09 | 0.003171 | 1.7743e-05 | 584.689404 | 0.805306 | 253.946281 | 30 |
+| dvsgesture | density_aware_chamfer | clean | 0.132415 | 0.006518 | 0.003201 | 1.6188e-05 | 584.688965 | 0.806224 | 251.848851 | 30 |
+| dvsgesture | hausdorff | clean | 6.7536e-04 | 2.3171e-05 | 0.002437 | 1.9104e-05 | 584.689453 | 0.738197 | 302.869292 | 30 |
+| dvsgesture | sinkhorn | clean | 0 | 0 | 0.544449 | 2.7923e-04 | 392.752441 | 20.738277 | 38.0904 | 30 |
+| dvsgesture | temporal_weighted_chamfer | clean | 2.1731e-07 | 2.1262e-07 | 0.004156 | 7.0863e-04 | 542.460254 | 0.805405 | 199.405816 | 90 |
+| ncaltech101 | chamfer | clean | 4.8997e-08 | 1.0772e-08 | 0.003977 | 5.8650e-04 | 542.022738 | 0.805306 | 207.514285 | 30 |
+| ncaltech101 | density_aware_chamfer | clean | 0.007462 | 0.006131 | 0.00403 | 5.7901e-04 | 542.022298 | 0.806224 | 204.744305 | 30 |
+| ncaltech101 | hausdorff | clean | 6.9053e-04 | 0 | 0.0031 | 4.7070e-04 | 542.022786 | 0.738197 | 244.412208 | 30 |
+| ncaltech101 | sinkhorn | clean | 0 | 0 | 0.694827 | 0.106541 | 392.752441 | 20.738277 | 30.655052 | 30 |
+| ncaltech101 | temporal_weighted_chamfer | clean | 2.1665e-07 | 2.0439e-07 | 0.00444 | 6.0524e-04 | 528.238032 | 0.805405 | 184.440789 | 90 |
+| nmnist | chamfer | clean | 6.2819e-08 | 1.4078e-09 | 0.003127 | 2.1558e-05 | 584.689404 | 0.805306 | 257.561346 | 30 |
+| nmnist | density_aware_chamfer | clean | 0.001393 | 2.3463e-04 | 0.003172 | 2.2461e-05 | 584.688965 | 0.806224 | 254.145814 | 30 |
+| nmnist | hausdorff | clean | 5.9446e-04 | 4.7701e-05 | 0.002435 | 1.7419e-05 | 584.689453 | 0.738197 | 303.121151 | 30 |
+| nmnist | sinkhorn | clean | 0 | 0 | 0.544519 | 2.0070e-04 | 392.752441 | 20.738277 | 38.085494 | 30 |
+| nmnist | temporal_weighted_chamfer | clean | 2.3122e-07 | 2.0624e-07 | 0.004062 | 5.6915e-04 | 542.460254 | 0.805405 | 202.694608 | 90 |
