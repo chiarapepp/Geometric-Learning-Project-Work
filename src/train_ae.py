@@ -30,7 +30,7 @@ class Config:
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
     model_name: str = "pointnet_ae"   # pointnet_ae | pointnet_vae | pointnetpp_ae
-    input_dim: int = 4                # (x, y, t, p) oppure 3
+    input_dim: int = 4                # (x, y, t, p) or 3
     num_points: int = 1024
     latent_dim: int = 256
     decoder_hidden_dim: int = 512

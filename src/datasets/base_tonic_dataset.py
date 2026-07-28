@@ -14,16 +14,16 @@ class BaseTonicDataset(Dataset):
     - optionally implement download
     """
 
-    sensor_size = None           # class attributes
+    sensor_size = None
     dtype = None
     ordering = None
 
     def __init__(
         self,
-        save_to: str,            # where to save the dataset on the system
-        transform: Callable | None = None,   
+        save_to: str,
+        transform: Callable | None = None,
         target_transform: Callable | None = None,
-        transforms: Callable | None = None,   # could act on both data and targets
+        transforms: Callable | None = None,
     ):
         super().__init__()
         self.location_on_system = os.path.join(

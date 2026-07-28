@@ -41,7 +41,7 @@ def do_epoch_ae(
     metrics_epoch = defaultdict(float)
 
     for i, batch in enumerate(tqdm(loader, desc=f"{'Train' if train else 'Val'} Epoch {epoch}")):
-        # expected batch format: (events, target) or similar
+        # The expected batch format is (events, target) or equivalent.
         if isinstance(batch, (list, tuple)):
             if len(batch) == 2:
                 data, _ = batch

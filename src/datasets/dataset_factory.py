@@ -35,19 +35,19 @@ def get_sensor_size(dataset_name: str):
     return DATASET_SPECS[name]["sensor_size"]
 
 
-# Define a pipeline of transformation to convert raw events into fixed-size 
+# Build a transformation pipeline that converts raw events into fixed-size
 # point clouds (XYT plus optional polarity)
 
 def build_pointcloud_transform(
     dataset_name: str,
     num_points: int = 1024,   # Number of points to sample from the event cloud
-    input_dim: int = 4, 
+    input_dim: int = 4,
     temporal_weight: float = 1.0,
     sample_mode: str = "random",
-    pad_mode: str = "repeat",  # How to pad if there are fewer than num_points 
+    pad_mode: str = "repeat",  # How to pad if there are fewer than num_points
     shuffle: bool = True,
 ):
-    if input_dim not in (3, 4): # 3 for XYT, 4 for XYTP 
+    if input_dim not in (3, 4):  # 3 for XYT, 4 for XYTP
         raise ValueError("input_dim must be 3 or 4")
 
     # The transformation pipeline includes:
@@ -57,7 +57,7 @@ def build_pointcloud_transform(
     # 4. Sample a fixed number of points from the event cloud, with options for sampling mode and padding.
     # 5. Optionally shuffle the points to remove any ordering bias.
     # 6. Convert the final point cloud to a PyTorch tensor.
-    
+
     transforms = [
         EventsToXYTP(),
         NormalizeXYT(get_sensor_size(dataset_name), temporal_weight=temporal_weight),
@@ -89,8 +89,8 @@ def get_dataset(
 ):
     name = dataset_name.lower()
 
-    # stream_mode can be either 'sample' where each sample is returned as a single point 
-    # cloud, or 'windowed' where each sample is returned as a stream of windowed point clouds.
+    # In sample mode, each sample is returned as a single point cloud. In
+    # windowed mode, each sample becomes a stream of windowed point clouds.
     stream_mode = stream_mode.lower()
     if stream_mode not in {"sample", "windowed"}:
         raise ValueError("stream_mode must be 'sample' or 'windowed'")
@@ -105,10 +105,10 @@ def get_dataset(
         dataset = NMNISTDataset(
             save_to=save_to,
             train=train,
-            # Optionally only return the first saccade (first 300ms of events) to reduce the 
-            # number of events and speed up training, since the later saccades often contain 
+            # Optionally only return the first saccade (first 300ms of events) to reduce the
+            # number of events and speed up training, since the later saccades often contain
             # fewer events and may not add much information for classification.
-            first_saccade_only=kwargs.get("first_saccade_only", False), 
+            first_saccade_only=kwargs.get("first_saccade_only", False),
             stabilize=kwargs.get("stabilize", False),
         )
 
@@ -116,7 +116,7 @@ def get_dataset(
         dataset = NCaltech101Dataset(
             save_to=save_to,
             train=train,
-            #  the split wasn't provided by the original dataset
+            # Use a deterministic split because the original dataset does not provide one.
             split_ratio=kwargs.get("split_ratio", 0.8),
             split_seed=kwargs.get("split_seed", 13),
         )

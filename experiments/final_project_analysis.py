@@ -1,7 +1,9 @@
 import argparse
 import csv
+import fnmatch
 import io
 import math
+import os
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -251,7 +253,13 @@ def scan_files(root, pattern):
     root = Path(root)
     if not root.exists():
         return []
-    return sorted(root.rglob(pattern))
+
+    matches = []
+    for dirpath, _, filenames in os.walk(root, followlinks=True):
+        for filename in filenames:
+            if fnmatch.fnmatch(filename, pattern):
+                matches.append(Path(dirpath) / filename)
+    return sorted(matches)
 
 
 def discover_training_artifacts(args):
@@ -399,9 +407,10 @@ def build_coverage(args, histories, checkpoints, epoch_checkpoints, evals, bench
                 history_count = len(histories.get(identity, []))
                 best_count = len(checkpoints.get(identity, []))
                 epoch_count = len(epoch_checkpoints.get(identity, []))
+                checkpoint_count = best_count or epoch_count
                 eval_count = len(evals.get(identity, []))
                 benchmark_count = 1 if (dataset, loss_name) in benchmark_present else 0
-                status = "complete" if history_count and best_count and eval_count and benchmark_count else "missing"
+                status = "complete" if history_count and checkpoint_count and eval_count and benchmark_count else "missing"
                 rows.append(
                     {
                         "dataset": dataset,
@@ -418,7 +427,7 @@ def build_coverage(args, histories, checkpoints, epoch_checkpoints, evals, bench
                         "eval_file_count": eval_count,
                         "status": status,
                         "first_history": first_path(histories.get(identity, [])),
-                        "first_checkpoint": first_path(checkpoints.get(identity, [])),
+                        "first_checkpoint": first_path(checkpoints.get(identity, []) or epoch_checkpoints.get(identity, [])),
                         "first_eval": first_path(evals.get(identity, [])),
                     }
                 )
@@ -1164,6 +1173,51 @@ def write_table_pair(output_dir, name, rows):
     write_markdown_table(md_path, rows)
 
 
+def count_grouped_paths(groups):
+    return sum(len(paths) for paths in groups.values())
+
+
+def print_input_diagnostics(args, histories, checkpoints, epoch_checkpoints, evals, benchmark_rows, coverage):
+    raw_histories = scan_files(args.root, "*_history.csv")
+    raw_checkpoints = scan_files(args.root, "*_best.pth")
+    raw_epoch_checkpoints = scan_files(args.root, "*_epoch_*.pth")
+    raw_evals = scan_files(args.eval_root, "*_corruptions.csv")
+    raw_benchmarks = []
+    for root in args.benchmark_root:
+        raw_benchmarks.extend(scan_files(root, "*.csv"))
+
+    print("=== Final analysis input diagnostics ===")
+    print(f"Analysis script: {Path(__file__).resolve()}")
+    print(f"Root exists: {Path(args.root).exists()} | root={args.root}")
+    print(f"Eval root exists: {Path(args.eval_root).exists()} | eval_root={args.eval_root}")
+    print(f"Benchmark roots: {' '.join(str(root) for root in args.benchmark_root)}")
+    print(
+        "Raw scanned files: "
+        f"histories={len(raw_histories)}, "
+        f"best_checkpoints={len(raw_checkpoints)}, "
+        f"epoch_checkpoints={len(raw_epoch_checkpoints)}, "
+        f"eval_files={len(raw_evals)}, "
+        f"benchmark_csv={len(raw_benchmarks)}"
+    )
+    print(
+        "Parsed identities: "
+        f"histories={len(histories)} identities/{count_grouped_paths(histories)} files, "
+        f"best_checkpoints={len(checkpoints)} identities/{count_grouped_paths(checkpoints)} files, "
+        f"epoch_checkpoints={len(epoch_checkpoints)} identities/{count_grouped_paths(epoch_checkpoints)} files, "
+        f"evals={len(evals)} identities/{count_grouped_paths(evals)} files, "
+        f"benchmark_rows={len(benchmark_rows)}"
+    )
+    print(
+        "Coverage signals: "
+        f"history={sum(1 for row in coverage if row['history_present'])}/{len(coverage)}, "
+        f"best={sum(1 for row in coverage if row['best_checkpoint_present'])}/{len(coverage)}, "
+        f"epoch={sum(1 for row in coverage if row['epoch_checkpoints_present'])}/{len(coverage)}, "
+        f"eval={sum(1 for row in coverage if row['eval_present'])}/{len(coverage)}, "
+        f"benchmark={sum(1 for row in coverage if row['benchmark_present'])}/{len(coverage)}"
+    )
+    print("========================================")
+
+
 def main():
     args = parse_args()
     output_dir = Path(args.output_dir)
@@ -1179,6 +1233,7 @@ def main():
     eval_rows = load_eval_rows(args)
 
     coverage = build_coverage(args, histories, checkpoints, epoch_checkpoints, evals, benchmark_rows)
+    print_input_diagnostics(args, histories, checkpoints, epoch_checkpoints, evals, benchmark_rows, coverage)
     convergence_summary = summarize_histories(args, histories)
     loss_benchmark_summary = summarize_loss_benchmarks(benchmark_rows)
     clean_summary = summarize_eval_clean(eval_rows)

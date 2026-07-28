@@ -29,7 +29,7 @@ class DVSGestureDataset(BaseTonicDataset):
 
         self.dataset = tonic.datasets.DVSGesture(save_to=save_to, train=train)
 
-        # Per coerenza con la base class, manteniamo data/targets
+        # Preserve data and targets for consistency with the base class.
         self.data = list(range(len(self.dataset)))
         self.targets = None
 

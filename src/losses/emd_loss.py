@@ -34,10 +34,10 @@ def emd_loss(y_hat, y, reduction="mean"):
         pred = y_hat[b]   # (N, D)
         target = y[b]     # (N, D)
 
-        # pairwise distance matrix: (N, N)
+        # Pairwise distance matrix: (N, N)
         cost_matrix = torch.cdist(pred, target, p=2)
 
-        # Hungarian on CPU
+        # Solve the Hungarian assignment on the CPU.
         row_ind, col_ind = linear_sum_assignment(cost_matrix.detach().cpu().numpy())
 
         row_ind = torch.as_tensor(row_ind, device=y_hat.device, dtype=torch.long)

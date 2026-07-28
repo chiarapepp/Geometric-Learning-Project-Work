@@ -33,8 +33,8 @@ class WandbHandler:
             return
         else:
             raise ValueError(f'Unknown wandb mode: {self.mode}')
-        
-        self.run.log_code(".")  # save the code to wandb
+
+        self.run.log_code(".")  # Log the repository source with W&B.
         self.run.define_metric("epoch")
         self.run.define_metric("it")
         self.run.define_metric("train/*", step_metric="epoch")
@@ -182,4 +182,4 @@ class WandbHandler:
             return
         self.log_artifact(checkpoint_path, name=artifact_name, artifact_type="model")
 
-    
+
