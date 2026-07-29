@@ -25,3 +25,4 @@ slurm_runs/
 *.pth
 *.ckpt
 slurm/
+scripts/

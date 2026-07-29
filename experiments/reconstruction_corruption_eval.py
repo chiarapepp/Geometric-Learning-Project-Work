@@ -9,6 +9,7 @@ import torch
 from tqdm import tqdm
 
 from src.evaluate import make_loader, perturb_points, unpack_points, write_csv
+from src.evaluation_metrics import point_cloud_fscore, point_cloud_hd95
 from src.losses.loss_factory import get_loss
 from src.train_ae import Config, build_model
 from src.utils import cuda_peak_memory, peak_memory_mb, set_seed
@@ -36,12 +37,41 @@ def parse_args():
             "If omitted, the checkpoint loss_time_weight is used."
         ),
     )
+    parser.add_argument(
+        "--temporal-metric-weights",
+        nargs="+",
+        type=float,
+        default=None,
+        help="Evaluate Temporal-Weighted Chamfer at each listed weight.",
+    )
+    parser.add_argument(
+        "--fscore-thresholds",
+        nargs="+",
+        type=float,
+        default=None,
+        help="Add point-cloud F-score metrics at the listed Euclidean thresholds.",
+    )
     parser.add_argument("--noise-stds", nargs="+", type=float, default=[0.0, 0.01, 0.03, 0.05, 0.1])
     parser.add_argument("--temporal-shuffle-fractions", nargs="+", type=float, default=[0.0, 0.1, 0.25, 0.5, 1.0])
     parser.add_argument("--drop-fractions", nargs="+", type=float, default=[0.0, 0.1, 0.25, 0.5])
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--num-workers", type=int, default=None)
     parser.add_argument("--max-batches", type=int, default=10)
+    parser.add_argument(
+        "--clean-only",
+        action="store_true",
+        help="Evaluate only the uncorrupted input condition.",
+    )
+    parser.add_argument(
+        "--deduplicate-clean",
+        action="store_true",
+        help="Evaluate the clean condition once instead of once per corruption family.",
+    )
+    parser.add_argument(
+        "--skip-plots",
+        action="store_true",
+        help="Skip per-metric plot generation.",
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output", default="outputs/eval/reconstruction_corruption_eval.csv")
     parser.add_argument("--plot-dir", default="outputs/eval/plots")
@@ -81,19 +111,98 @@ def config_from_checkpoint(checkpoint, args):
     return Config(**values)
 
 
-def build_metric_functions(metric_names, loss_time_weight):
+def metric_value_tag(value):
+    return f"{value:g}".replace(".", "p")
+
+
+def build_metric_functions(
+    metric_names,
+    loss_time_weight,
+    temporal_metric_weights=None,
+    fscore_thresholds=None,
+):
     metric_functions = {}
+    metric_metadata = {}
     for metric_name in metric_names:
+        if metric_name == "hd95":
+            metric_functions[metric_name] = point_cloud_hd95
+            metric_metadata[metric_name] = {
+                "metric_time_weight": "",
+                "fscore_threshold": "",
+            }
+            continue
+        if metric_name == "temporal_weighted_chamfer" and temporal_metric_weights:
+            for time_weight in temporal_metric_weights:
+                output_name = (
+                    "temporal_weighted_chamfer_tw"
+                    f"{metric_value_tag(time_weight)}"
+                )
+                metric_functions[output_name] = get_loss(
+                    metric_name,
+                    time_weight=time_weight,
+                )
+                metric_metadata[output_name] = {
+                    "metric_time_weight": time_weight,
+                    "fscore_threshold": "",
+                }
+            continue
+
         kwargs = {}
         if metric_name == "temporal_weighted_chamfer":
             kwargs["time_weight"] = loss_time_weight
         metric_functions[metric_name] = get_loss(metric_name, **kwargs)
-    return metric_functions
+        metric_metadata[metric_name] = {
+            "metric_time_weight": (
+                loss_time_weight
+                if metric_name == "temporal_weighted_chamfer"
+                else ""
+            ),
+            "fscore_threshold": "",
+        }
+
+    for threshold in fscore_thresholds or []:
+        output_name = f"fscore_tau{metric_value_tag(threshold)}"
+        metric_functions[output_name] = (
+            lambda prediction, target, current_threshold=threshold:
+            point_cloud_fscore(
+                prediction,
+                target,
+                threshold=current_threshold,
+            )
+        )
+        metric_metadata[output_name] = {
+            "metric_time_weight": "",
+            "fscore_threshold": threshold,
+        }
+
+    return metric_functions, metric_metadata
 
 
 def corruption_specs(args):
+    if args.clean_only:
+        return [
+            {
+                "corruption": "clean",
+                "corruption_level": 0.0,
+                "noise_std": 0.0,
+                "temporal_shuffle_fraction": 0.0,
+                "drop_fraction": 0.0,
+            }
+        ]
     specs = []
+    if args.deduplicate_clean:
+        specs.append(
+            {
+                "corruption": "clean",
+                "corruption_level": 0.0,
+                "noise_std": 0.0,
+                "temporal_shuffle_fraction": 0.0,
+                "drop_fraction": 0.0,
+            }
+        )
     for noise_std in args.noise_stds:
+        if args.deduplicate_clean and noise_std == 0.0:
+            continue
         specs.append(
             {
                 "corruption": "gaussian_noise",
@@ -104,6 +213,8 @@ def corruption_specs(args):
             }
         )
     for fraction in args.temporal_shuffle_fractions:
+        if args.deduplicate_clean and fraction == 0.0:
+            continue
         specs.append(
             {
                 "corruption": "temporal_shuffle",
@@ -114,6 +225,8 @@ def corruption_specs(args):
             }
         )
     for fraction in args.drop_fractions:
+        if args.deduplicate_clean and fraction == 0.0:
+            continue
         specs.append(
             {
                 "corruption": "random_drop",
@@ -224,7 +337,12 @@ def main():
         if args.metric_time_weight is not None
         else cfg.loss_time_weight
     )
-    metric_functions = build_metric_functions(args.metrics, metric_time_weight)
+    metric_functions, metric_metadata = build_metric_functions(
+        args.metrics,
+        metric_time_weight,
+        temporal_metric_weights=args.temporal_metric_weights,
+        fscore_thresholds=args.fscore_thresholds,
+    )
 
     rows = []
     specs = corruption_specs(args)
@@ -256,6 +374,7 @@ def main():
                 for metric_name, metric_fn in metric_functions.items():
                     reconstruction_value = metric_fn(reconstruction, target)
                     corrupted_input_value = metric_fn(corrupted, target)
+                    metadata = metric_metadata[metric_name]
                     rows.append(
                         {
                             "batch": batch_idx,
@@ -263,6 +382,7 @@ def main():
                             "split": args.split,
                             "model": cfg.model_name,
                             "trained_loss": cfg.loss_name,
+                            "trained_loss_time_weight": cfg.loss_time_weight,
                             "checkpoint": args.checkpoint,
                             "corruption": spec["corruption"],
                             "corruption_level": spec["corruption_level"],
@@ -270,7 +390,8 @@ def main():
                             "temporal_shuffle_fraction": spec["temporal_shuffle_fraction"],
                             "drop_fraction": spec["drop_fraction"],
                             "metric": metric_name,
-                            "metric_time_weight": metric_time_weight if metric_name == "temporal_weighted_chamfer" else "",
+                            "metric_time_weight": metadata["metric_time_weight"],
+                            "fscore_threshold": metadata["fscore_threshold"],
                             "reconstruction_value": float(reconstruction_value.detach().cpu().item()),
                             "corrupted_input_value": float(corrupted_input_value.detach().cpu().item()),
                             "model_seconds": model_seconds,
@@ -289,7 +410,8 @@ def main():
 
     write_csv(Path(args.output), rows)
     logger.log_reconstruction_eval_results(rows, csv_path=args.output)
-    write_plots(rows, args.plot_dir, logger)
+    if not args.skip_plots:
+        write_plots(rows, args.plot_dir, logger)
     logger.finish()
     print(f"Wrote {len(rows)} evaluation rows to {args.output}")
 

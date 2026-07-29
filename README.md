@@ -10,13 +10,7 @@ Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
-```
-
-On Windows, activate it with:
-
-```powershell
-.venv\Scripts\Activate.ps1
+source .venv/bin/activate    # On Windows: venv\Scripts\activate
 ```
 
 Install the dependencies:
@@ -26,11 +20,9 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Install a CUDA-compatible version of PyTorch when GPU training is required.
-
 ## Dataset setup
 
-The datasets are downloaded automatically through `tonic` the first time they are used. By default, they are stored in `./data`, which is ignored by Git.
+The datasets are downloaded automatically through `tonic` the first time they are used. By default, they are stored in `./data`.
 
 | Dataset | CLI value | Notes |
 |---|---|---|
@@ -62,7 +54,7 @@ python -m src.train_ae \
 | Parameter | Default | Description |
 |---|---:|---|
 | `--dataset` | `dvsgesture` | Dataset: `dvsgesture`, `nmnist`, or `ncaltech101`. |
-| `--model-name` | `pointnet_ae` | Model: `pointnet_ae`, `pointnet_vae`, or `pointnetpp_ae`. |
+| `--model-name` | `pointnet_ae` | Model: `pointnet_ae` or `pointnetpp_ae`. |
 | `--loss-name` | `chamfer` | Reconstruction loss used for training. |
 | `--input-dim` | `4` | Point format: `3` for `[x, y, t]`, `4` for `[x, y, t, p]`. |
 | `--num-points` | `1024` | Number of points in each input cloud. |
@@ -124,36 +116,19 @@ python -m experiments.loss_comparison \
 | Model | Description |
 |---|---|
 | `pointnet_ae` | PointNet encoder with an MLP decoder. |
-| `pointnet_vae` | Variational PointNet autoencoder. |
 | `pointnetpp_ae` | PointNet++ encoder with an MLP decoder. |
 
 ## Losses
 
-The project includes Chamfer, density-aware Chamfer, temporal-weighted Chamfer, Sinkhorn, Hausdorff, Hungarian EMD, projection, and voxel losses. An optional CUDA EMD implementation is also supported when its external extension is installed.
-
-## Weights & Biases
-
-Experiment tracking is disabled by default. Enable it with:
-
-```bash
---wandb online --wandb-project geometric-learning-project
-```
+The project includes Chamfer, density-aware Chamfer, temporal-weighted Chamfer, Sinkhorn and Hausdorff.
 
 ## Results and report
 
-Small, presentation-ready artifacts are versioned in [`outputs/final`](outputs/final/README.md). This directory contains selected plots, qualitative examples, CSV tables, Markdown tables, and a concise summary.
+Small, artifacts are present in [`outputs/final`](outputs/final/README.md). This directory contains selected plots, qualitative examples, CSV tables, Markdown tables, and a concise summary.
 
 Raw experiment runs, downloaded datasets, checkpoints, logs, and intermediate outputs are ignored by Git.
 
-The written project report belongs in [`docs`](docs/). Before submission, add the final document as `docs/report.pdf`.
-
-## Quick checks
-
-```bash
-python -m src.test_model
-python -m src.test_losses
-python -m src.test_flops
-```
+The written project report belongs in [`docs`](docs/). 
 
 ## Repository structure
 
