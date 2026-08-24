@@ -104,7 +104,7 @@ def main():
     parser.add_argument(
         "--kind",
         required=True,
-        choices=["loss_comparison", "noise", "temporal_shuffle", "convergence"],
+        choices=["loss_comparison", "noise", "temporal_shuffle", "random_drop", "convergence"],
     )
     parser.add_argument("--output-dir", default="outputs/plots")
     parser.add_argument("--wandb", default="disabled", choices=["online", "disabled"])
@@ -135,6 +135,8 @@ def main():
         plot_corruption(rows, output_dir, "noise_std", "noise_robustness.png")
     elif args.kind == "temporal_shuffle":
         plot_corruption(rows, output_dir, "temporal_shuffle_fraction", "temporal_shuffle.png")
+    elif args.kind == "random_drop":
+        plot_corruption(rows, output_dir, "drop_fraction", "random_drop.png")
     else:
         plot_convergence(rows, output_dir)
 

@@ -8,9 +8,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import torch
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.evaluate import make_loader, perturb_points, unpack_points
+from src.datasets.evaluation_sampling import IndexedSubsetDataset, load_manifest_indices
 from src.losses.loss_factory import get_loss
 from src.train_ae import Config, build_model
 from src.utils import ensure_dir, set_seed
@@ -49,6 +51,10 @@ def parse_args():
     parser.add_argument("--save-to", default=None)
     parser.add_argument("--split", default="test", choices=["train", "test"])
     parser.add_argument("--sample-indices", nargs="+", type=int, default=[0, 1, 2])
+    parser.add_argument(
+        "--subset-manifest", default=None,
+        help="Optional balanced-subset manifest. With it, --sample-indices are original dataset_index values.",
+    )
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--max-plot-points", type=int, default=2048)
@@ -171,10 +177,15 @@ def take_sample_indices(loader, sample_indices, device):
     for batch in loader:
         points = unpack_points(batch).float()
         batch_size = points.shape[0]
+        if isinstance(batch, (tuple, list)) and len(batch) > 2:
+            batch_indices = batch[2]
+            batch_indices = batch_indices.detach().cpu().tolist() if torch.is_tensor(batch_indices) else list(batch_indices)
+        else:
+            batch_indices = list(range(seen, seen + batch_size))
         for local_idx in range(batch_size):
-            global_idx = seen + local_idx
-            if global_idx in wanted:
-                samples[global_idx] = points[local_idx].to(device)
+            dataset_idx = int(batch_indices[local_idx])
+            if dataset_idx in wanted:
+                samples[dataset_idx] = points[local_idx].to(device)
         seen += batch_size
         if len(samples) == len(wanted):
             break
@@ -271,12 +282,22 @@ def scatter_3d(ax, points, title, t_max):
 
 
 def format_metric_summary(metric_values):
+    """Format a compact, wrapped metric legend for visual panels."""
+    labels = {
+        "chamfer": "CD",
+        "temporal_weighted_chamfer": "TW-CD",
+        "hausdorff": "HD",
+        "mse": "MSE",
+    }
     bits = []
     for metric_name, values in metric_values.items():
         rec_value = values["reconstruction"]
         input_value = values["corrupted_input"]
-        bits.append(f"{metric_name}: rec={rec_value:.4g}, input={input_value:.4g}")
-    return " | ".join(bits)
+        label = labels.get(metric_name, metric_name)
+        bits.append(f"{label}: rec {rec_value:.4g}; input {input_value:.4g}")
+    # A two-line legend stays inside the canvas at every export resolution.
+    midpoint = (len(bits) + 1) // 2
+    return "     ".join(bits[:midpoint]) + "\n" + "     ".join(bits[midpoint:])
 
 
 def plot_visual_panel(
@@ -331,8 +352,10 @@ def plot_visual_panel(
         f"sample={metadata['sample_idx']} | {metadata['corruption']}={metadata['level']}\n"
         f"{metric_text}"
     )
-    fig.suptitle(title, fontsize=11)
-    fig.tight_layout(rect=(0, 0.0, 1, 0.955))
+    # Reserve a fixed header band so the title and metric legend cannot intrude
+    # on the first row of 3D panels.
+    fig.suptitle(title, fontsize=9, y=0.992, linespacing=1.25)
+    fig.tight_layout(rect=(0, 0.0, 1, 0.925), h_pad=2.5, w_pad=1.5)
     ensure_dir(output_path.parent)
     fig.savefig(output_path, dpi=dpi)
     plt.close(fig)
@@ -414,6 +437,13 @@ def main():
             window_drop_last=cfg.window_drop_last,
             max_windows_per_sample=cfg.max_windows_per_sample,
         )
+        if args.subset_manifest is not None:
+            indices = load_manifest_indices(args.subset_manifest, len(loader.dataset))
+            loader = DataLoader(
+                IndexedSubsetDataset(loader.dataset, indices),
+                batch_size=cfg.test_batch_size, shuffle=False, num_workers=cfg.num_workers,
+                pin_memory=torch.cuda.is_available(),
+            )
         set_seed(args.seed)
         samples = take_sample_indices(loader, args.sample_indices, cfg.device)
         time_weight = args.metric_time_weight

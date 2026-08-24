@@ -76,6 +76,7 @@ def get_dataset(
     dataset_name: str,
     save_to: str,
     train: bool = True,
+    split: str | None = None,
     transform=None,
     target_transform=None,
     transforms=None,
@@ -99,12 +100,16 @@ def get_dataset(
         dataset = DVSGestureDataset(
             save_to=save_to,
             train=train,
+            split=split,
+            split_seed=kwargs.get("split_seed", 13),
         )
 
     elif name == "nmnist":
         dataset = NMNISTDataset(
             save_to=save_to,
             train=train,
+            split=split,
+            split_seed=kwargs.get("split_seed", 13),
             # Optionally only return the first saccade (first 300ms of events) to reduce the
             # number of events and speed up training, since the later saccades often contain
             # fewer events and may not add much information for classification.
@@ -116,6 +121,7 @@ def get_dataset(
         dataset = NCaltech101Dataset(
             save_to=save_to,
             train=train,
+            split=split,
             # Use a deterministic split because the original dataset does not provide one.
             split_ratio=kwargs.get("split_ratio", 0.8),
             split_seed=kwargs.get("split_seed", 13),

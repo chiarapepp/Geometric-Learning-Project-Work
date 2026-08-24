@@ -84,7 +84,15 @@ def unpack_points(batch):
     return points.float()
 
 
-def perturb_points(points, noise_std=0.0, temporal_shuffle_fraction=0.0, drop_fraction=0.0):
+def perturb_points(
+    points,
+    noise_std=0.0,
+    temporal_shuffle_fraction=0.0,
+    drop_fraction=0.0,
+    preserve_num_points_after_drop=True,
+):
+    if not 0.0 <= drop_fraction < 1.0:
+        raise ValueError(f"drop_fraction must be in [0, 1), got {drop_fraction}")
     perturbed = points.clone()
     if noise_std > 0:
         noise = torch.randn_like(perturbed)
@@ -99,17 +107,30 @@ def perturb_points(points, noise_std=0.0, temporal_shuffle_fraction=0.0, drop_fr
             shuffled = idx[torch.randperm(count, device=perturbed.device)]
             perturbed[b, idx, 2] = perturbed[b, shuffled, 2]
     if drop_fraction > 0:
-        keep_probability = 1.0 - drop_fraction
-        mask = torch.rand(perturbed.shape[:2], device=perturbed.device) < keep_probability
-        for b in range(perturbed.shape[0]):
-            kept = perturbed[b][mask[b]]
-            if len(kept) == 0:
-                kept = perturbed[b, :1]
-            if len(kept) >= perturbed.shape[1]:
-                perturbed[b] = kept[: perturbed.shape[1]]
-            else:
-                extra = kept[torch.randint(0, len(kept), (perturbed.shape[1] - len(kept),), device=perturbed.device)]
-                perturbed[b] = torch.cat([kept, extra], dim=0)
+        batch_size, num_points, point_dim = perturbed.shape
+        keep_count = max(1, int(round(num_points * (1.0 - drop_fraction))))
+        kept_clouds = []
+        for b in range(batch_size):
+            indices = torch.randperm(num_points, device=perturbed.device)[:keep_count]
+            kept_clouds.append(perturbed[b, indices])
+        kept = torch.stack(kept_clouds)
+
+        if preserve_num_points_after_drop:
+            repeat_count = num_points - keep_count
+            if repeat_count > 0:
+                repeat_indices = torch.randint(
+                    0,
+                    keep_count,
+                    (batch_size, repeat_count),
+                    device=perturbed.device,
+                )
+                repeated = torch.gather(
+                    kept,
+                    1,
+                    repeat_indices.unsqueeze(-1).expand(-1, -1, point_dim),
+                )
+                kept = torch.cat([kept, repeated], dim=1)
+        perturbed = kept
     if perturbed.shape[-1] >= 2:
         perturbed[..., 0] = perturbed[..., 0].clamp(0.0, 1.0)
         perturbed[..., 1] = perturbed[..., 1].clamp(0.0, 1.0)
@@ -130,6 +151,7 @@ def benchmark_losses(
     noise_std=0.0,
     temporal_shuffle_fraction=0.0,
     drop_fraction=0.0,
+    preserve_num_points_after_drop=True,
     loss_kwargs=None,
 ):
     rows = []
@@ -161,6 +183,7 @@ def benchmark_losses(
             noise_std=noise_std,
             temporal_shuffle_fraction=temporal_shuffle_fraction,
             drop_fraction=drop_fraction,
+            preserve_num_points_after_drop=preserve_num_points_after_drop,
         )
 
         for loss_name, loss_fn in loss_functions.items():
@@ -198,6 +221,7 @@ def benchmark_losses(
                     "flops_method": flop_estimate.method,
                     "batch_size": int(target.shape[0]),
                     "num_points": int(target.shape[1]),
+                    "prediction_num_points": int(prediction.shape[1]),
                     "point_dim": int(target.shape[2]),
                     "noise_std": noise_std,
                     "temporal_shuffle_fraction": temporal_shuffle_fraction,

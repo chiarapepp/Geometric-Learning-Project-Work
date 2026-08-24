@@ -26,9 +26,9 @@ The datasets are downloaded automatically through `tonic` the first time they ar
 
 | Dataset | CLI value | Notes |
 |---|---|---|
-| DVS Gesture | `dvsgesture` | Gesture events with an official train/test split. |
-| N-MNIST | `nmnist` | Event-based handwritten digits with an official train/test split. |
-| N-Caltech101 | `ncaltech101` | Event-based object recognition; this project uses a deterministic 80/20 split. |
+| DVS Gesture | `dvsgesture` | Official train split divided deterministically into 80% train / 20% validation; official test is held out. |
+| N-MNIST | `nmnist` | Official train split divided deterministically into 80% train / 20% validation; official test is held out. |
+| N-Caltech101 | `ncaltech101` | Deterministic 80% train / 10% validation / 10% test split. |
 
 Use a different dataset directory with `--save-to PATH`.
 
@@ -96,6 +96,41 @@ python -m experiments.reconstruction_corruption_eval \
 
 The evaluation applies Gaussian noise, temporal shuffling, and random point removal. It writes a CSV summary and reconstruction plots.
 
+### Representative evaluation subsets
+
+For windowed datasets, do not stop at the first batches: they can contain a
+single class or several windows from one recording. First inspect the split
+and create a deterministic, class-balanced manifest:
+
+```bash
+python -m experiments.inspect_dataset_composition \
+  --dataset ncaltech101 --save-to /path/to/data --split test \
+  --stream-mode windowed --window-size 4096 --window-stride 4096 \
+  --items-per-class 4 --max-windows-per-source 1 \
+  --output-dir outputs/composition
+```
+
+The generated `*_balanced_subset.csv` records the exact dataset indices,
+class labels, original recording identifiers, and window positions. Reuse it
+for every checkpoint so loss comparisons remain paired:
+
+```bash
+python -m experiments.reconstruction_corruption_eval \
+  --checkpoint /path/to/checkpoint.pth --split test --device cuda \
+  --eval-subset-from outputs/composition/ncaltech101_test_windowed_balanced_subset.csv \
+  --output outputs/eval/ncaltech101_balanced.csv
+```
+
+Or create the subset directly during evaluation with
+`--eval-sampling stratified --eval-items-per-class 4
+--eval-max-windows-per-source 1`. The selected manifest is always saved next
+to the evaluation CSV. The same options are available in
+`experiments.latent_robustness_eval`.
+
+For qualitative figures, pass the same manifest to
+`experiments.visual_reconstruction_eval --subset-manifest ...` and choose
+three `dataset_index` values from its CSV with `--sample-indices`.
+
 ## Compare reconstruction losses
 
 Run a small benchmark on one dataset:
@@ -110,6 +145,29 @@ python -m experiments.loss_comparison \
   --device cuda \
   --output outputs/benchmarks/dvsgesture_loss_comparison.csv
 ```
+
+Evaluate the same standalone objectives after removing a controlled fraction
+of points (the perturbed cloud is not padded back to its original size):
+
+```bash
+python -m experiments.random_drop \
+  --dataset dvsgesture \
+  --losses chamfer density_aware_chamfer sinkhorn temporal_weighted_chamfer hausdorff \
+  --fractions 0.0 0.1 0.25 0.5 \
+  --num-points 4096 \
+  --input-dim 3 \
+  --stream-mode windowed \
+  --window-size 4096 \
+  --window-stride 4096 \
+  --no-shuffle-points \
+  --batch-size 4 \
+  --max-batches 10 \
+  --device cuda \
+  --output outputs/benchmarks/dvsgesture_random_drop.csv
+```
+
+EMD is intentionally excluded because its one-to-one assignment requires the
+two clouds to contain the same number of points.
 
 ## Models
 

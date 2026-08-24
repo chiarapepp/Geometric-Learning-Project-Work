@@ -13,6 +13,8 @@ class DVSGestureDataset(BaseTonicDataset):
         self,
         save_to: str,
         train: bool = True,
+        split: str | None = None,
+        split_seed: int = 13,
         transform: Callable | None = None,
         target_transform: Callable | None = None,
         transforms: Callable | None = None,
@@ -23,18 +25,29 @@ class DVSGestureDataset(BaseTonicDataset):
             target_transform=target_transform,
             transforms=transforms,
         )
-        self.train = train
+        split = split or ("train" if train else "test")
+        if split not in {"train", "val", "test"}:
+            raise ValueError("split must be 'train', 'val', or 'test'")
+        self.train = split != "test"
 
         import tonic
 
-        self.dataset = tonic.datasets.DVSGesture(save_to=save_to, train=train)
+        self.dataset = tonic.datasets.DVSGesture(save_to=save_to, train=self.train)
+
+        all_indices = np.arange(len(self.dataset))
+        if split in {"train", "val"}:
+            shuffled = np.random.default_rng(split_seed).permutation(all_indices)
+            cut = int(round(0.8 * len(shuffled)))
+            self.indices = np.sort(shuffled[:cut] if split == "train" else shuffled[cut:])
+        else:
+            self.indices = all_indices
 
         # Preserve data and targets for consistency with the base class.
-        self.data = list(range(len(self.dataset)))
+        self.data = self.indices.tolist()
         self.targets = None
 
     def __getitem__(self, index):
-        events, target = self.dataset[index]
+        events, target = self.dataset[int(self.indices[index])]
 
         if self.transform is not None:
             events = self.transform(events)
@@ -46,7 +59,7 @@ class DVSGestureDataset(BaseTonicDataset):
         return events, target
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.indices)
 
     def _check_exists(self):
         return True

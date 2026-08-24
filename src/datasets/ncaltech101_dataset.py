@@ -13,6 +13,7 @@ class NCaltech101Dataset(BaseTonicDataset):
         self,
         save_to: str,
         train: bool = True,
+        split: str | None = None,
         split_ratio: float = 0.8,
         split_seed: int = 13,
         transform: Callable | None = None,
@@ -29,19 +30,20 @@ class NCaltech101Dataset(BaseTonicDataset):
         import tonic
 
         self.dataset = tonic.datasets.NCALTECH101(save_to=save_to)
-        self.train = train
+        split = split or ("train" if train else "test")
+        if split not in {"train", "val", "test"}:
+            raise ValueError("split must be 'train', 'val', or 'test'")
+        self.train = split
         self.split_ratio = split_ratio
         self.split_seed = split_seed
 
         all_indices = np.arange(len(self.dataset))
         rng = np.random.default_rng(split_seed)
         shuffled_indices = rng.permutation(all_indices)
-        split_index = int(round(split_ratio * len(shuffled_indices)))
-
-        if train:
-            self.indices = np.sort(shuffled_indices[:split_index])
-        else:
-            self.indices = np.sort(shuffled_indices[split_index:])
+        train_end = int(round(split_ratio * len(shuffled_indices)))
+        val_end = int(round((split_ratio + (1.0 - split_ratio) / 2) * len(shuffled_indices)))
+        ranges = {"train": shuffled_indices[:train_end], "val": shuffled_indices[train_end:val_end], "test": shuffled_indices[val_end:]}
+        self.indices = np.sort(ranges[split])
 
         self.data = self.indices.tolist()
         if getattr(self.dataset, "targets", None) is not None:

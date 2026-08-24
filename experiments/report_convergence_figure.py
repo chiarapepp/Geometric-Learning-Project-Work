@@ -12,26 +12,45 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "outputs" / "final_windowed4096"
 OUT = ROOT / "report" / "figures"
-OBJECTIVES = ["chamfer", "density_aware_chamfer", "hausdorff"]
+OBJECTIVES = [
+    "chamfer",
+    "density_aware_chamfer",
+    "hausdorff",
+    "projection",
+    "temporal_weighted_chamfer",
+]
 COLORS = {
     "chamfer": "#0072B2",
     "density_aware_chamfer": "#D55E00",
     "hausdorff": "#009E73",
+    "projection": "#CC79A7",
+    "temporal_weighted_chamfer": "#E69F00",
+}
+LINESTYLES = {
+    "chamfer": "-",
+    "density_aware_chamfer": "--",
+    "hausdorff": "-.",
+    "projection": ":",
+    "temporal_weighted_chamfer": (0, (5, 1)),
 }
 LABELS = {
     "chamfer": "Chamfer",
     "density_aware_chamfer": "DCD",
     "hausdorff": "Hausdorff",
+    "projection": "Projection",
+    "temporal_weighted_chamfer": "Temporal Chamfer",
 }
 
 
-def read_history(path: Path) -> tuple[np.ndarray, np.ndarray]:
+def read_history(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     with path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
-    by_epoch = {int(row["epoch"]): float(row["val_loss"]) for row in rows}
+    by_epoch = {int(row["epoch"]): row for row in rows}
     epochs = np.array(sorted(by_epoch), dtype=int)
-    values = np.array([by_epoch[epoch] for epoch in epochs])
-    return epochs, values
+    train = np.array([float(by_epoch[e]["train_loss"] ) for e in epochs])
+    values = np.array([float(by_epoch[e]["val_loss"] ) for e in epochs])
+    seconds = np.array([float(by_epoch[e]["epoch_seconds"] ) for e in epochs])
+    return epochs, train, values, seconds
 
 
 def main() -> None:
@@ -46,14 +65,14 @@ def main() -> None:
     statistics: list[dict[str, str | float | int]] = []
 
     fig, axes = plt.subplots(
-        2, 3, figsize=(8.2, 4.5), sharex=True, constrained_layout=True
+        2, 3, figsize=(10.5, 5.8), sharex=True, constrained_layout=True
     )
     for column, dataset in enumerate(datasets):
         for row_index, model in enumerate(models):
             axis = axes[row_index, column]
             for objective in OBJECTIVES:
                 run_name = f"{dataset}_{model}_{objective}"
-                epochs, values = read_history(
+                epochs, train, values, seconds = read_history(
                     SOURCE / run_name / f"{run_name}_history.csv"
                 )
                 initial = values[0]
@@ -71,6 +90,7 @@ def main() -> None:
                         / initial,
                         "epoch_best": int(epochs[values.argmin()]),
                         "epoch_90_percent_improvement": epoch_90,
+                        "mean_epoch_seconds": float(np.mean(seconds)),
                         "normalized_auc": float(
                             np.trapz(normalized, epochs) / (epochs[-1] - epochs[0])
                         ),
@@ -79,13 +99,14 @@ def main() -> None:
                 axis.plot(
                     epochs + 1,
                     normalized,
-                    linewidth=1.5,
+                    linewidth=1.8,
                     color=COLORS[objective],
+                    linestyle=LINESTYLES[objective],
                     label=LABELS[objective],
                 )
 
             axis.set_title(
-                f"{dataset_labels[dataset]} — {model_labels[model]}", fontsize=9
+                f"{dataset_labels[dataset]} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â {model_labels[model]}", fontsize=9
             )
             axis.set_xlabel("Epoch")
             axis.set_ylabel(r"Validation loss / $L_0$")
@@ -96,10 +117,10 @@ def main() -> None:
         handles,
         labels,
         loc="upper center",
-        ncol=3,
+        ncol=5,
         frameon=False,
         bbox_to_anchor=(0.5, 1.045),
-        fontsize=8,
+        fontsize=8.5,
     )
     fig.savefig(OUT / "normalized_validation_curves.pdf", bbox_inches="tight")
     fig.savefig(

@@ -219,6 +219,7 @@ def main():
         dataset_name=cfg.dataset,
         save_to=cfg.save_to,
         train=False,
+        split="val",
         transform=transform,
         split_ratio=cfg.split_ratio,
         split_seed=cfg.split_seed,

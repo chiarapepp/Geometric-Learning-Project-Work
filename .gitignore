@@ -26,3 +26,6 @@ slurm_runs/
 *.ckpt
 slurm/
 scripts/
+tmp/
+report_figures/
+report/

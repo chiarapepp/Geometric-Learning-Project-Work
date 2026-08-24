@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 
 
 METRICS = [
-    ("mean_d_encoder_cosine", r"$d_{enc}$"),
-    ("mean_d_target_delta_cosine", r"$\Delta d_{target}$"),
-    ("mean_d_end_to_end_cosine", r"$d_{AE}$"),
+    ("mean_d_true_cosine", r"$d_{true}$ (lower is better)"),
+    ("mean_exact_top1", "Exact instance Top-1"),
+    ("mean_retrieval_margin", r"Retrieval margin $d_{wrong}-d_{true}$"),
 ]
 
 
@@ -80,6 +80,9 @@ def make_plots(rows, output_dir, protocol_label):
 
         fig, axes = plt.subplots(1, 3, figsize=(14, 4.2))
         for axis, (metric, ylabel) in zip(axes, METRICS):
+            if not all(metric in row and row[metric] != "" for row in group):
+                axis.set_visible(False)
+                continue
             for objective, objective_rows in sorted(by_objective.items()):
                 points = []
                 clean_row = clean.get((dataset, model, objective))

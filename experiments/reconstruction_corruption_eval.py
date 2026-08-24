@@ -9,6 +9,7 @@ import torch
 from tqdm import tqdm
 
 from src.evaluate import make_loader, perturb_points, unpack_points, write_csv
+from src.datasets.evaluation_sampling import make_evaluation_loader, write_csv_rows
 from src.evaluation_metrics import point_cloud_fscore, point_cloud_hd95
 from src.losses.loss_factory import get_loss
 from src.train_ae import Config, build_model
@@ -26,6 +27,14 @@ def parse_args():
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--dataset", default=None, choices=["dvsgesture", "nmnist", "ncaltech101"])
     parser.add_argument("--save-to", default=None)
+    parser.add_argument(
+        "--data-root",
+        default=None,
+        help=(
+            "Dataset-root override. This is an explicit alias for --save-to "
+            "and takes precedence over the path stored in the checkpoint."
+        ),
+    )
     parser.add_argument("--split", default="test", choices=["train", "test"])
     parser.add_argument("--metrics", nargs="+", default=DEFAULT_METRICS)
     parser.add_argument(
@@ -57,6 +66,27 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--num-workers", type=int, default=None)
     parser.add_argument("--max-batches", type=int, default=10)
+    parser.add_argument(
+        "--eval-sampling", choices=["ordered", "random", "stratified"], default="ordered",
+        help="How to choose the evaluation subset. 'stratified' balances classes and recordings.",
+    )
+    parser.add_argument(
+        "--eval-items-per-class", type=int, default=None,
+        help="Required for --eval-sampling stratified; target number of windows/items per class.",
+    )
+    parser.add_argument(
+        "--eval-max-windows-per-source", type=int, default=1,
+        help="Maximum selected windows from one original recording in stratified evaluation.",
+    )
+    parser.add_argument("--eval-sampling-seed", type=int, default=13)
+    parser.add_argument(
+        "--eval-subset-from", default=None,
+        help="CSV manifest made by inspect_dataset_composition; reuses exactly those dataset indices.",
+    )
+    parser.add_argument(
+        "--eval-subset-manifest", default=None,
+        help="Where to save the selected subset manifest (defaults beside --output).",
+    )
     parser.add_argument(
         "--clean-only",
         action="store_true",
@@ -93,8 +123,11 @@ def config_from_checkpoint(checkpoint, args):
 
     if args.dataset is not None:
         values["dataset"] = args.dataset
-    if args.save_to is not None:
-        values["save_to"] = args.save_to
+    if args.save_to is not None and args.data_root is not None:
+        raise ValueError("Use only one of --save-to and --data-root.")
+    dataset_root = args.data_root if args.data_root is not None else args.save_to
+    if dataset_root is not None:
+        values["save_to"] = dataset_root
     values["device"] = args.device
     if args.batch_size is not None:
         values["test_batch_size"] = args.batch_size
@@ -256,13 +289,15 @@ def aggregate_rows(rows):
     for (corruption, level, metric), group_rows in grouped.items():
         reconstruction_values = [float(row["reconstruction_value"]) for row in group_rows]
         corrupted_input_values = [float(row["corrupted_input_value"]) for row in group_rows]
+        weights = [int(row["batch_size"]) for row in group_rows]
+        total_weight = sum(weights)
         aggregate.append(
             {
                 "corruption": corruption,
                 "corruption_level": float(level),
                 "metric": metric,
-                "mean_reconstruction_value": sum(reconstruction_values) / len(reconstruction_values),
-                "mean_corrupted_input_value": sum(corrupted_input_values) / len(corrupted_input_values),
+                "mean_reconstruction_value": sum(value * weight for value, weight in zip(reconstruction_values, weights)) / total_weight,
+                "mean_corrupted_input_value": sum(value * weight for value, weight in zip(corrupted_input_values, weights)) / total_weight,
             }
         )
     return aggregate
@@ -312,7 +347,7 @@ def main():
     model = model.to(cfg.device)
     model.eval()
 
-    loader = make_loader(
+    base_loader = make_loader(
         dataset_name=cfg.dataset,
         save_to=cfg.save_to,
         split=args.split,
@@ -332,6 +367,24 @@ def main():
         window_drop_last=cfg.window_drop_last,
         max_windows_per_sample=cfg.max_windows_per_sample,
     )
+    loader, subset_rows = make_evaluation_loader(
+        base_loader.dataset,
+        dataset_name=cfg.dataset,
+        batch_size=cfg.test_batch_size,
+        num_workers=cfg.num_workers,
+        mode=args.eval_sampling,
+        max_items=args.max_batches * cfg.test_batch_size,
+        items_per_class=args.eval_items_per_class,
+        max_windows_per_source=args.eval_max_windows_per_source,
+        seed=args.eval_sampling_seed,
+        subset_from=args.eval_subset_from,
+    )
+    subset_manifest = (
+        Path(args.eval_subset_manifest) if args.eval_subset_manifest else
+        Path(args.output).with_name(f"{Path(args.output).stem}_subset.csv")
+    )
+    write_csv_rows(subset_manifest, subset_rows)
+    evaluation_max_batches = len(loader)
     metric_time_weight = (
         args.metric_time_weight
         if args.metric_time_weight is not None
@@ -348,9 +401,9 @@ def main():
     specs = corruption_specs(args)
     with torch.no_grad():
         for spec_idx, spec in enumerate(tqdm(specs, desc="Corruptions")):
-            progress = tqdm(loader, total=min(args.max_batches, len(loader)), desc=spec["corruption"])
+            progress = tqdm(loader, total=evaluation_max_batches, desc=spec["corruption"])
             for batch_idx, batch in enumerate(progress):
-                if batch_idx >= args.max_batches:
+                if batch_idx >= evaluation_max_batches:
                     break
 
                 target = unpack_points(batch).to(cfg.device)
@@ -399,6 +452,8 @@ def main():
                             "batch_size": int(target.shape[0]),
                             "num_points": int(target.shape[1]),
                             "point_dim": int(target.shape[2]),
+                            "evaluation_sampling": args.eval_sampling,
+                            "evaluation_subset_size": len(subset_rows),
                         }
                     )
 
@@ -414,6 +469,7 @@ def main():
         write_plots(rows, args.plot_dir, logger)
     logger.finish()
     print(f"Wrote {len(rows)} evaluation rows to {args.output}")
+    print(f"Wrote {len(subset_rows)} selected evaluation items to {subset_manifest}")
 
 
 if __name__ == "__main__":

@@ -72,9 +72,10 @@ def standalone_response() -> None:
             "Temporal shuffle",
             r"Shuffled fraction $\rho$",
         ),
+        ("drop", "drop_fraction", "Random point drop", r"Dropped fraction $\delta$"),
     ]
 
-    fig, axes = plt.subplots(2, 2, figsize=(8.2, 5.8), constrained_layout=True)
+    fig, axes = plt.subplots(2, 3, figsize=(12.0, 5.8), constrained_layout=True)
 
     # Top row: compare response shapes across objective families. Each curve is
     # normalized independently because the raw objective scales are different.
@@ -164,6 +165,53 @@ def standalone_response() -> None:
         dpi=220,
         bbox_inches="tight",
     )
+    plt.close(fig)
+
+    # Preserve the native clean-subtracted scale as a companion figure.  This
+    # makes the absolute size of the response available without mixing it with
+    # the shape-only normalization used in the report-facing view above.
+    fig, axes = plt.subplots(2, 3, figsize=(12.0, 5.8), constrained_layout=True)
+    for column, (suffix, level_col, title, xlabel) in enumerate(configurations):
+        axis = axes[0, column]
+        values = defaultdict(lambda: defaultdict(list))
+        for path in sorted(source.glob(f"*_core_tw1_{suffix}.csv")):
+            for row in read_csv(path):
+                if row["loss"] in core_objectives:
+                    values[row["loss"]][float(row[level_col])].append(float(row["value"]))
+        for loss in core_objectives:
+            levels = sorted(values[loss])
+            means = np.array([np.mean(values[loss][level]) for level in levels])
+            axis.plot(levels, means - means[0], marker=core_markers[loss], linewidth=1.8,
+                      markersize=4.5, color=core_colors[loss], label=core_labels[loss])
+        axis.set_title(f"Core objectives: {title}", fontsize=10)
+        axis.set_xlabel(xlabel)
+        axis.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
+        axis.grid(alpha=0.25)
+
+        axis = axes[1, column]
+        for time_weight in [1, 2, 5]:
+            pattern = (f"*_core_tw1_{suffix}.csv" if time_weight == 1
+                       else f"*_temporal_tw{time_weight}_{suffix}.csv")
+            values = defaultdict(list)
+            for path in sorted(source.glob(pattern)):
+                for row in read_csv(path):
+                    if row["loss"] == "temporal_weighted_chamfer":
+                        values[float(row[level_col])].append(float(row["value"]))
+            levels = sorted(values)
+            means = np.array([np.mean(values[level]) for level in levels])
+            axis.plot(levels, means - means[0], marker=temporal_markers[time_weight], linewidth=1.8,
+                      markersize=4.5, color=temporal_colors[time_weight], label=rf"$\lambda_t={time_weight}$")
+        axis.set_title(f"Temporal weighting: {title}", fontsize=10)
+        axis.set_xlabel(xlabel)
+        axis.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
+        axis.grid(alpha=0.25)
+
+    axes[0, 0].set_ylabel("Clean-subtracted response")
+    axes[0, 0].legend(loc="upper left", ncol=2, frameon=False, fontsize=8)
+    axes[1, 0].set_ylabel("Clean-subtracted response")
+    axes[1, 0].legend(loc="upper left", frameon=False, fontsize=8)
+    fig.savefig(OUT / "standalone_corruption_response_raw.pdf", bbox_inches="tight")
+    fig.savefig(OUT / "standalone_corruption_response_raw.png", dpi=220, bbox_inches="tight")
     plt.close(fig)
 
 def reconstruction_robustness() -> None:
